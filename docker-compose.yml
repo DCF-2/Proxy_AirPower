@@ -1,0 +1,15 @@
+version: '3.8'
+
+services:
+  proxy-api:
+    build: .
+    container_name: proxy_airpower_api
+    ports:
+      - "8080:8080"
+    environment:
+      # ATENÇÃO: Se o PostgreSQL estiver a correr diretamente na máquina física (Host),
+      # use host.docker.internal ou o IP da rede local em vez de 'localhost'.
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://host.docker.internal:5432/airpower
+      - SPRING_DATASOURCE_USERNAME=postgres
+      - SPRING_DATASOURCE_PASSWORD=1234567890
+    restart: always

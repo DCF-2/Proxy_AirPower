@@ -17,8 +17,11 @@ public class AuthController {
     }
 
     @PostMapping("/login")
-    public ResponseEntity<AuthResponseDTO> login(@RequestBody AuthRequestDTO request) {
-        AuthResponseDTO response = authService.authenticate(request);
+    public ResponseEntity<AuthResponseDTO> login(
+            @RequestBody AuthRequestDTO request,
+            @RequestHeader("X-ThingsBoard-URL") String thingsboardUrl) {
+
+        AuthResponseDTO response = authService.authenticate(request, thingsboardUrl);
         return ResponseEntity.ok(response);
     }
 }

@@ -1,0 +1,22 @@
+name: Deploy Docker to Lab Machine
+
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  build-and-deploy:
+    runs-on: self-hosted # Corre no laboratório
+
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v3
+
+      - name: Parar contentores antigos
+        run: docker-compose down || true
+
+      - name: Fazer o Build e Levantar Novos Contentores
+        run: docker-compose up -d --build
+
+      - name: Limpar Imagens Docker Antigas (Opcional, poupa espaço)
+        run: docker image prune -f
