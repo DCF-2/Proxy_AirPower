@@ -16,7 +16,7 @@ import java.util.Map;
 @Service
 public class AuthProxyService {
 
-    @Value("${thingsboard.api.url}")
+
     private String thingsboardUrl;
 
     private final RestTemplate restTemplate;
@@ -26,7 +26,7 @@ public class AuthProxyService {
         this.restTemplate = restTemplate;
     }
 
-    public AuthResponseDTO authenticate(AuthRequestDTO requestDTO) {
+    public AuthResponseDTO authenticate(AuthRequestDTO requestDTO, String thingsboardUrl) {
         String url = thingsboardUrl + "/api/auth/login";
 
         HttpHeaders headers = new HttpHeaders();
