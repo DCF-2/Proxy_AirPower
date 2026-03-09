@@ -9,7 +9,7 @@ services:
     environment:
       # ATENÇÃO: Se o PostgreSQL estiver a correr diretamente na máquina física (Host),
       # use host.docker.internal ou o IP da rede local em vez de 'localhost'.
-      - SPRING_DATASOURCE_URL=jdbc:postgresql://host.docker.internal:5432/airpower
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://10.5.0.68:5432/airpower
       - SPRING_DATASOURCE_USERNAME=postgres
       - SPRING_DATASOURCE_PASSWORD=1234567890
     restart: always
