@@ -1,0 +1,59 @@
+### --- JAVA & SPRING BOOT (MAVEN) ---
+HELP.md
+target/
+!.mvn/wrapper/maven-wrapper.jar
+/bin/
+/out/
+
+# Se você preferir NÃO versionar o Maven Wrapper (geralmente ele é mantido)
+#.mvn/wrapper/maven-wrapper.jar
+#maven-wrapper.properties
+
+### --- LOGS & TEMPORÁRIOS ---
+*.log
+/logs/
+temp/
+*.tmp
+*.bak
+
+### --- INTELLIJ IDEA ---
+.idea/
+*.iws
+*.iml
+*.ipr
+out/
+# Se quiser manter as configurações de execução do time, use:
+#!.idea/runConfigurations/
+#!.idea/icon.svg
+
+### --- VS CODE ---
+.vscode/
+*.code-workspace
+
+### --- STS (Spring Tool Suite) & ECLIPSE ---
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings/
+.springBeans
+.sts4-cache
+
+### --- NETBEANS ---
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
+build/
+
+### --- SISTEMA OPERACIONAL ---
+.DS_Store
+Thumbs.db
+desktop.ini
+
+### --- SEGURANÇA (IMPORTANTE) ---
+# Ignorar arquivos que podem conter senhas ou chaves de API
+.env
+application-local.properties
+application-local.yml
