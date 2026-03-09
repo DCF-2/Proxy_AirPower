@@ -1,6 +1,7 @@
 package com.lab.dexter.gpsers.airp.proxyairpower.controllers;
 
 import com.lab.dexter.gpsers.airp.proxyairpower.dtos.CreateDeviceRequest;
+import com.lab.dexter.gpsers.airp.proxyairpower.dtos.LocationRequest;
 import com.lab.dexter.gpsers.airp.proxyairpower.services.DeviceProxyService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -45,5 +46,16 @@ public class DeviceController {
 
         JsonNode credentials = deviceProxyService.getDeviceCredentials(token, deviceId);
         return ResponseEntity.ok(credentials);
+    }
+
+    // POST /api/devices/{id}/location
+    @PostMapping("/{id}/location")
+    public ResponseEntity<Void> saveLocation(
+            @RequestHeader("Authorization") String token,
+            @PathVariable("id") String deviceId,
+            @RequestBody LocationRequest location) {
+
+        deviceProxyService.saveDeviceLocation(token, deviceId, location);
+        return ResponseEntity.ok().build();
     }
 }

@@ -6,6 +6,4 @@ public record DeviceDTO(
         String type,
         String label,
         boolean active
-) {
-
-}
+) { }
