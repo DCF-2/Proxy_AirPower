@@ -2,6 +2,7 @@ package com.lab.dexter.gpsers.airp.proxyairpower.services;
 
 import com.lab.dexter.gpsers.airp.proxyairpower.dtos.CreateDeviceRequest;
 
+import com.lab.dexter.gpsers.airp.proxyairpower.dtos.LocationRequest;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
@@ -71,5 +72,20 @@ public class DeviceProxyService {
         ResponseEntity<JsonNode> response = restTemplate.exchange(url, HttpMethod.GET, entity, JsonNode.class);
 
         return response.getBody();
+    }
+
+    // 4. SALVAR LOCALIZAÇÃO (TELEMETRIA)
+    public void saveDeviceLocation(String token, String deviceId, LocationRequest location) {
+        // A rota de telemetria do ThingsBoard
+        String url = thingsboardUrl + "/api/plugins/telemetry/DEVICE/" + deviceId + "/SERVER_SCOPE";
+
+        Map<String, Double> body = new HashMap<>();
+        body.put("latitude", location.latitude());
+        body.put("longitude", location.longitude());
+
+        HttpEntity<Map<String, Double>> entity = new HttpEntity<>(body, createHeaders(token));
+
+        // Enviamos um POST para guardar os atributos/telemetria
+        restTemplate.exchange(url, HttpMethod.POST, entity, Void.class);
     }
 }
