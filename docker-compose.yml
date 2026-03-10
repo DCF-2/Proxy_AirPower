@@ -11,5 +11,5 @@ services:
       # use host.docker.internal ou o IP da rede local em vez de 'localhost'.
       - SPRING_DATASOURCE_URL=jdbc:postgresql://10.5.0.68:5434/airpower
       - SPRING_DATASOURCE_USERNAME=postgres
-      - SPRING_DATASOURCE_PASSWORD=postgres
+      - SPRING_DATASOURCE_PASSWORD=root
     restart: always
