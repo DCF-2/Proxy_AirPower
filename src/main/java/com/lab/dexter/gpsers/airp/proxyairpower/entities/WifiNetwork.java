@@ -1,22 +1,29 @@
-package com.lab.dexter.gpsers.airp.proxyairpower.entities;
+package com.lab.dexter.gpsers.airp.proxyairpower.models;
 
 import jakarta.persistence.*;
-import lombok.Data; // Lombok gera Getters e Setters automaticamente
 
-@Data
 @Entity
-@Table(name = "wifi_networks")
+@Table(name = "wifi_networks") // Conecta à tabela antiga
 public class WifiNetwork {
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false, unique = true)
     private String ssid;
 
-    @Column(nullable = false)
     private String password;
 
-    @Column(nullable = false)
+    // MUDANÇA AQUI: de "description" para "location"
     private String location;
+
+    // Gere os Getters e Setters novamente para refletir o novo nome:
+    public Long getId() { return id; }
+    public void setId(Long id) { this.id = id; }
+    public String getSsid() { return ssid; }
+    public void setSsid(String ssid) { this.ssid = ssid; }
+    public String getPassword() { return password; }
+    public void setPassword(String password) { this.password = password; }
+    public String getLocation() { return location; }
+    public void setLocation(String location) { this.location = location; }
 }

@@ -24,7 +24,7 @@ function renderTable(networks) {
                     ${net.password}
                 </span>
             </td>
-            <td class="text-secondary">${net.description}</td>
+            <td class="text-secondary">${net.location}</td>
             <td class="text-end">
                 <button class="btn btn-danger btn-sm" onclick="deleteNetwork(${net.id})">
                     <i class="bi bi-trash3"></i> Apagar
@@ -59,7 +59,7 @@ document.getElementById('wifiForm').addEventListener('submit', async (e) => {
     const newNetwork = {
         ssid: document.getElementById('ssid').value,
         password: document.getElementById('password').value,
-        description: document.getElementById('description').value
+        location: document.getElementById('description').value
     };
 
     try {
