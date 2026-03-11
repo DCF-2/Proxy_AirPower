@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AirPower | Login Admin</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="/css/style.css">
+    <style>
+        body {
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-color: #f4f7f6;
+        }
+        .login-card {
+            width: 100%;
+            max-width: 400px;
+            padding: 2rem;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            background: white;
+        }
+    </style>
+</head>
+<body>
+
+<div class="login-card text-center">
+    <div class="mb-4 text-primary">
+        <i class="bi bi-wifi" style="font-size: 3rem;"></i>
+        <h3 class="fw-bold mt-2">AirPower Admin</h3>
+        <p class="text-muted small">Acesso restrito ao Gateway</p>
+    </div>
+
+    <div id="alertBox" class="alert d-none" role="alert"></div>
+
+    <form action="/perform_login" method="POST">
+        <div class="form-floating mb-3">
+            <input type="text" class="form-control" id="username" name="username" placeholder="Usuário" required>
+            <label for="username">Usuário</label>
+        </div>
+        <div class="form-floating mb-4">
+            <input type="password" class="form-control" id="password" name="password" placeholder="Senha" required>
+            <label for="password">Senha</label>
+        </div>
+        <button type="submit" class="btn btn-primary w-100 py-2 fw-bold mb-3">Entrar</button>
+    </form>
+</div>
+
+<script>
+    // Lê a URL para mostrar mensagens bonitas se o utilizador errar a senha ou sair
+    const urlParams = new URLSearchParams(window.location.search);
+    const alertBox = document.getElementById('alertBox');
+
+    if (urlParams.has('error')) {
+        alertBox.className = 'alert alert-danger';
+        alertBox.innerHTML = '<i class="bi bi-exclamation-triangle"></i> Credenciais inválidas!';
+    } else if (urlParams.has('logout')) {
+        alertBox.className = 'alert alert-success';
+        alertBox.innerHTML = '<i class="bi bi-check-circle"></i> Sessão encerrada com segurança.';
+    }
+</script>
+</body>
+</html>
