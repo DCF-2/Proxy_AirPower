@@ -1,4 +1,4 @@
-package com.lab.dexter.gpsers.airp.proxyairpower.models;
+package com.lab.dexter.gpsers.airp.proxyairpower.entities;
 
 import jakarta.persistence.*;
 
