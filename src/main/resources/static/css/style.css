@@ -1,0 +1,51 @@
+/* Fundo mais suave para realçar os painéis */
+body {
+    background-color: #f8f9fa;
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+}
+
+/* Estilo padronizado para os cards */
+.custom-card {
+    border: none;
+    border-radius: 12px;
+    box-shadow: 0 0.25rem 0.75rem rgba(0, 0, 0, 0.05);
+    transition: transform 0.2s ease-in-out;
+}
+
+/* Efeito hover nas linhas da tabela */
+.table-hover tbody tr:hover {
+    background-color: #f1f8ff;
+}
+
+/* Transição suave nos botões */
+.btn {
+    border-radius: 8px;
+    transition: all 0.2s;
+}
+
+.btn-primary {
+    background-color: #0d6efd;
+    border: none;
+}
+
+.btn-primary:hover {
+    background-color: #0b5ed7;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(13, 110, 253, 0.3);
+}
+
+.btn-danger {
+    border-radius: 6px;
+}
+
+/* Esconder senhas com classe mágica */
+.password-blur {
+    filter: blur(4px);
+    cursor: pointer;
+    transition: filter 0.2s;
+    user-select: none;
+}
+
+.password-blur:hover, .password-blur.revealed {
+    filter: blur(0px);
+}
