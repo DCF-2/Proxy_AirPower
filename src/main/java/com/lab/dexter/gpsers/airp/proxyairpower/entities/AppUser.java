@@ -32,6 +32,10 @@ public class AppUser {
     @JoinColumn(name = "app_client_id", nullable = false)
     private AppClient appClient; // A qual app este utilizador pertence
 
+    private String tbUrl;
+    private String tbUsername;
+    private String tbPassword;
+
     // Getters e Setters
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
@@ -49,4 +53,10 @@ public class AppUser {
     public void setExpirationDate(LocalDateTime expirationDate) { this.expirationDate = expirationDate; }
     public AppClient getAppClient() { return appClient; }
     public void setAppClient(AppClient appClient) { this.appClient = appClient; }
+    public String getTbUrl() { return tbUrl; }
+    public void setTbUrl(String tbUrl) { this.tbUrl = tbUrl; }
+    public String getTbUsername() { return tbUsername; }
+    public void setTbUsername(String tbUsername) { this.tbUsername = tbUsername; }
+    public String getTbPassword() { return tbPassword; }
+    public void setTbPassword(String tbPassword) { this.tbPassword = tbPassword; }
 }
