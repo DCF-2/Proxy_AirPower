@@ -132,4 +132,30 @@ public class UserController {
             return ResponseEntity.badRequest().body("Status inválido.");
         }
     }
+
+    // --- 5. EDITAR USUÁRIO (Credenciais TB e Validade) ---
+    @PutMapping("/{id}")
+    public ResponseEntity<?> editUser(@PathVariable Long id, @RequestBody Map<String, String> payload) {
+        Optional<AppUser> userOpt = userRepository.findById(id);
+        if (userOpt.isEmpty()) return ResponseEntity.notFound().build();
+
+        AppUser user = userOpt.get();
+
+        // Atualiza Validade
+        if (payload.containsKey("expirationDate") && !payload.get("expirationDate").isEmpty()) {
+            user.setExpirationDate(LocalDateTime.parse(payload.get("expirationDate"), DateTimeFormatter.ISO_DATE_TIME));
+        } else if (payload.containsKey("expirationDate")) {
+            user.setExpirationDate(null); // Remove a validade (vitalício)
+        }
+
+        // Atualiza Credenciais do TB
+        if (payload.containsKey("tbUrl")) user.setTbUrl(payload.get("tbUrl"));
+        if (payload.containsKey("tbUsername")) user.setTbUsername(payload.get("tbUsername"));
+        if (payload.containsKey("tbPassword") && !payload.get("tbPassword").isEmpty()) {
+            user.setTbPassword(CryptoUtil.encrypt(payload.get("tbPassword")));
+        }
+
+        userRepository.save(user);
+        return ResponseEntity.ok("Usuário atualizado com sucesso!");
+    }
 }

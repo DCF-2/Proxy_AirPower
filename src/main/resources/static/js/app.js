@@ -32,7 +32,8 @@ async function loadNetworks() {
                     <td><span class="password-blur" onclick="this.classList.toggle('revealed')" title="Clique para revelar">${net.password}</span></td>
                     <td class="text-secondary">${net.location}</td>
                     <td class="text-end">
-                        <button class="btn btn-outline-danger btn-sm" onclick="deleteNetwork(${net.id})"><i class="bi bi-trash"></i></button>
+                        <button class="btn btn-outline-primary btn-sm me-1" onclick="openWifiModal(${net.id}, '${net.ssid}', '${net.location}')" title="Editar"><i class="bi bi-pencil"></i></button>
+                        <button class="btn btn-outline-danger btn-sm" onclick="deleteNetwork(${net.id})" title="Apagar"><i class="bi bi-trash"></i></button>
                     </td>
                 </tr>
             `;
@@ -67,14 +68,13 @@ async function uploadCsv() {
 
         const result = await response.json();
         if (response.ok) {
-            alert(result.message); // Exibe "Sucesso! X redes importadas."
-            loadNetworks(); // Recarrega a tabela imediatamente
+            alert(result.message);
+            loadNetworks();
 
-            // Fecha o modal do Bootstrap
             const modalEl = document.getElementById('csvModal');
             const modal = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
             modal.hide();
-            fileInput.value = ''; // Limpa o input
+            fileInput.value = '';
         } else {
             alert(result.error);
         }
@@ -97,20 +97,16 @@ async function loadUsers() {
         let pendingCount = 0;
 
         users.forEach(user => {
-            // Conta quantos estão pendentes para o alerta vermelho no menu
             if (user.status === 'PENDING') pendingCount++;
 
-            // Formatação da Data de Validade
             let validadeStr = user.expirationDate ? new Date(user.expirationDate).toLocaleString('pt-BR') : '<span class="badge bg-success">Vitalício</span>';
 
-            // Cor do Status (Badge)
             let statusBadge = '';
             if (user.status === 'APPROVED') statusBadge = '<span class="badge bg-success">Aprovado</span>';
             else if (user.status === 'PENDING') statusBadge = '<span class="badge bg-warning text-dark">Pendente</span>';
             else if (user.status === 'BANNED') statusBadge = '<span class="badge bg-danger">Banido</span>';
             else statusBadge = `<span class="badge bg-secondary">${user.status}</span>`;
 
-            // Botões de Ação Dinâmicos
             let actionButtons = '';
             if (user.status === 'PENDING') {
                 actionButtons = `
@@ -122,6 +118,10 @@ async function loadUsers() {
             } else if (user.status === 'BANNED' || user.status === 'REJECTED') {
                 actionButtons = `<button class="btn btn-outline-success btn-sm" onclick="changeUserStatus(${user.id}, 'APPROVED')"><i class="bi bi-arrow-counterclockwise"></i> Restaurar</button>`;
             }
+
+            // O botão editar entra AQUI, depois de actionButtons ter sido criado
+            let btnEdit = `<button class="btn btn-outline-primary btn-sm me-1" onclick="openEditUserModal(${user.id}, '${user.tbUrl||''}', '${user.tbUsername||''}', '${user.expirationDate||''}')" title="Editar"><i class="bi bi-pencil"></i></button>`;
+            actionButtons = btnEdit + actionButtons;
 
             tbody.innerHTML += `
                 <tr>
@@ -137,7 +137,6 @@ async function loadUsers() {
             `;
         });
 
-        // Atualiza a bolinha vermelha no menu
         const badge = document.getElementById('pendingCount');
         badge.innerText = pendingCount;
         badge.style.display = pendingCount > 0 ? 'inline-block' : 'none';
@@ -147,7 +146,6 @@ async function loadUsers() {
     }
 }
 
-// Prepara e abre o modal de aprovação
 function openApproveModal(userId) {
     document.getElementById('approveUserId').value = userId;
     document.getElementById('tbUrl').value = '';
@@ -159,7 +157,6 @@ function openApproveModal(userId) {
     modal.show();
 }
 
-// Dispara a aprovação real com os dados do ThingsBoard
 async function confirmApproval() {
     const id = document.getElementById('approveUserId').value;
 
@@ -178,10 +175,8 @@ async function confirmApproval() {
         });
 
         if (response.ok) {
-            // Esconde o modal
             const modal = bootstrap.Modal.getInstance(document.getElementById('approveModal'));
             modal.hide();
-            // Atualiza a tabela
             loadUsers();
         } else {
             alert("Erro ao aprovar o utilizador.");
@@ -191,7 +186,6 @@ async function confirmApproval() {
     }
 }
 
-// Muda o status rapidamente (Banir, Restaurar, Rejeitar)
 async function changeUserStatus(id, newStatus) {
     if(confirm(`Tem a certeza que deseja mudar o status para ${newStatus}?`)) {
         await fetch(`${API_USERS}/${id}/status`, {
@@ -201,6 +195,86 @@ async function changeUserStatus(id, newStatus) {
         });
         loadUsers();
     }
+}
+
+// --- FUNÇÕES DO MODAL WI-FI (Adicionar/Editar) ---
+function openWifiModal(id = '', ssid = '', location = '') {
+    document.getElementById('wifiId').value = id;
+    document.getElementById('wifiSsid').value = ssid;
+    document.getElementById('wifiPassword').value = '';
+    document.getElementById('wifiLocation').value = location;
+
+    document.getElementById('wifiModalTitle').innerHTML = id ? '<i class="bi bi-pencil"></i> Editar Rede' : '<i class="bi bi-router"></i> Nova Rede';
+
+    new bootstrap.Modal(document.getElementById('wifiModal')).show();
+}
+
+async function saveWifi() {
+    const id = document.getElementById('wifiId').value;
+    const payload = {
+        ssid: document.getElementById('wifiSsid').value,
+        password: document.getElementById('wifiPassword').value,
+        location: document.getElementById('wifiLocation').value
+    };
+
+    const url = id ? `${API_WIFI}/${id}` : API_WIFI;
+    const method = id ? 'PUT' : 'POST';
+
+    try {
+        const response = await fetch(url, {
+            method: method,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+
+        if (response.ok) {
+            bootstrap.Modal.getInstance(document.getElementById('wifiModal')).hide();
+            loadNetworks();
+        } else {
+            alert("Erro ao salvar rede.");
+        }
+    } catch (e) { console.error(e); }
+}
+
+// --- FUNÇÕES DO MODAL DE EDITAR USUÁRIO ---
+function openEditUserModal(id, url, username, expiration) {
+    document.getElementById('editUserId').value = id;
+    document.getElementById('editTbUrl').value = url;
+    document.getElementById('editTbUser').value = username;
+    document.getElementById('editTbPass').value = '';
+
+    if (expiration && expiration !== 'null') {
+        document.getElementById('editExpiration').value = expiration.substring(0, 16);
+    } else {
+        document.getElementById('editExpiration').value = '';
+    }
+
+    new bootstrap.Modal(document.getElementById('editUserModal')).show();
+}
+
+async function saveUserEdit() {
+    const id = document.getElementById('editUserId').value;
+    const payload = {
+        tbUrl: document.getElementById('editTbUrl').value,
+        tbUsername: document.getElementById('editTbUser').value,
+        tbPassword: document.getElementById('editTbPass').value,
+        expirationDate: document.getElementById('editExpiration').value || null
+    };
+
+    try {
+        const response = await fetch(`${API_USERS}/${id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+
+        if (response.ok) {
+            bootstrap.Modal.getInstance(document.getElementById('editUserModal')).hide();
+            loadUsers();
+        } else {
+            alert("Erro ao atualizar usuário.");
+        }
+    } catch (e) { console.error(e); }
 }
 
 // --- ARRANQUE INICIAL ---

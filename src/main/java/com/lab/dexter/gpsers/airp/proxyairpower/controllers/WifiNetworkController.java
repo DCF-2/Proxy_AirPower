@@ -82,4 +82,21 @@ public class WifiNetworkController {
             return ResponseEntity.status(500).body(Map.of("error", "Erro ao processar o ficheiro CSV: " + e.getMessage()));
         }
     }
+
+    // --- 5. EDITAR REDE EXISTENTE ---
+    @PutMapping("/authorized/{id}")
+    public ResponseEntity<?> updateNetwork(@PathVariable Long id, @RequestBody WifiNetwork updatedNetwork) {
+        return repository.findById(id).map(net -> {
+            net.setSsid(updatedNetwork.getSsid());
+            net.setLocation(updatedNetwork.getLocation());
+
+            // Só atualiza a senha se o admin digitou uma nova (evita apagar a antiga sem querer)
+            if (updatedNetwork.getPassword() != null && !updatedNetwork.getPassword().isEmpty()) {
+                net.setPassword(CryptoUtil.encrypt(updatedNetwork.getPassword()));
+            }
+
+            repository.save(net);
+            return ResponseEntity.ok().build();
+        }).orElse(ResponseEntity.notFound().build());
+    }
 }
