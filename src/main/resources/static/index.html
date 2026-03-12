@@ -36,9 +36,10 @@
             <div id="tab-wifi" class="dashboard-tab">
                 <div class="d-flex justify-content-between align-items-center mb-4">
                     <h2 class="fw-bold text-dark"><i class="bi bi-router"></i> Redes Autorizadas</h2>
-                    <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#csvModal">
-                        <i class="bi bi-filetype-csv"></i> Importar CSV
-                    </button>
+                    <div>
+                        <button class="btn btn-primary me-2" onclick="openWifiModal()"><i class="bi bi-plus-circle"></i> Nova Rede</button>
+                        <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#csvModal"><i class="bi bi-filetype-csv"></i> Importar CSV</button>
+                    </div>
                 </div>
 
                 <div class="card custom-card">
@@ -128,6 +129,64 @@
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
                 <button type="button" class="btn btn-success" onclick="confirmApproval()">Confirmar Aprovação</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="wifiModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="wifiModalTitle"><i class="bi bi-router"></i> Nova Rede</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="wifiId">
+                <div class="mb-3">
+                    <label class="form-label fw-bold">SSID (Nome da Rede)</label>
+                    <input type="text" id="wifiSsid" class="form-control" placeholder="Ex: Laboratorio_IoT">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Senha</label>
+                    <input type="password" id="wifiPassword" class="form-control" placeholder="Deixe em branco para não alterar">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Localização</label>
+                    <input type="text" id="wifiLocation" class="form-control" placeholder="Ex: Prédio A - Sala 10">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" onclick="saveWifi()">Salvar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="editUserModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-pencil-square"></i> Editar Usuário</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="editUserId">
+                <div class="mb-3">
+                    <label class="form-label text-primary fw-bold">Credenciais do ThingsBoard</label>
+                    <input type="text" id="editTbUrl" class="form-control mb-2" placeholder="URL (ex: http://10.5.0.66:8080)">
+                    <input type="text" id="editTbUser" class="form-control mb-2" placeholder="E-mail do ThingsBoard">
+                    <input type="password" id="editTbPass" class="form-control" placeholder="Nova Senha (deixe em branco para manter)">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label text-danger fw-bold">Validade do Acesso</label>
+                    <input type="datetime-local" id="editExpiration" class="form-control">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" onclick="saveUserEdit()">Salvar Alterações</button>
             </div>
         </div>
     </div>
