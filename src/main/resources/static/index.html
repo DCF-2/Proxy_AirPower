@@ -3,67 +3,46 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AirPower | Painel de Redes</title>
+    <title>AirPower | Dashboard</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
     <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
 
-<nav class="navbar navbar-dark bg-primary shadow-sm mb-4">
-    <div class="container">
-        <a class="navbar-brand" href="#">
-            <i class="bi bi-wifi"></i> AirPower Admin
-        </a>
-        <div class="d-flex align-items-center">
-            <span class="navbar-text text-light me-3 d-none d-md-block">Gestão de Provisionamento ESP32</span>
-            <a href="/perform_logout" class="btn btn-sm btn-outline-light text-white">
-                <i class="bi bi-box-arrow-right"></i> Sair
+<div class="d-flex" id="wrapper">
+    <div class="bg-dark text-white" id="sidebar-wrapper" style="width: 250px; min-height: 100vh;">
+        <div class="sidebar-heading p-4 text-center border-bottom border-secondary">
+            <i class="bi bi-wifi fs-2 text-primary"></i><br>
+            <span class="fw-bold fs-5">AirPower OS</span>
+        </div>
+        <div class="list-group list-group-flush mt-3">
+            <a href="#" class="list-group-item list-group-item-action bg-dark text-white border-0 py-3" onclick="showTab('tab-wifi')">
+                <i class="bi bi-router me-2"></i> Redes Wi-Fi
+            </a>
+            <a href="#" class="list-group-item list-group-item-action bg-dark text-white border-0 py-3" onclick="showTab('tab-users')">
+                <i class="bi bi-people me-2"></i> Gestão de Usuários
+                <span class="badge bg-danger rounded-pill float-end" id="pendingCount">0</span>
+            </a>
+            <a href="/perform_logout" class="list-group-item list-group-item-action bg-dark text-danger border-0 py-3 mt-5">
+                <i class="bi bi-box-arrow-left me-2"></i> Sair do Sistema
             </a>
         </div>
     </div>
-</nav>
 
-<div class="container">
-    <div class="row g-4">
+    <div id="page-content-wrapper" class="w-100 bg-light">
+        <div class="container-fluid p-5">
 
-        <div class="col-lg-4">
-            <div class="card custom-card">
-                <div class="card-header bg-transparent border-0 pt-4 pb-0">
-                    <h5 class="card-title fw-bold"><i class="bi bi-plus-circle"></i> Adicionar Rede</h5>
-                </div>
-                <div class="card-body">
-                    <form id="wifiForm">
-                        <div class="form-floating mb-3">
-                            <input type="text" class="form-control" id="ssid" placeholder="Nome" required>
-                            <label for="ssid">SSID (Nome da Rede)</label>
-                        </div>
-                        <div class="form-floating mb-3">
-                            <input type="text" class="form-control" id="password" placeholder="Senha" required>
-                            <label for="password">Senha (Password)</label>
-                        </div>
-                        <div class="form-floating mb-4">
-                            <input type="text" class="form-control" id="description" placeholder="Local" required>
-                            <label for="description">Descrição / Local</label>
-                        </div>
-                        <button type="submit" class="btn btn-primary w-100 py-2 fw-bold">
-                            <i class="bi bi-save"></i> Registar Rede
-                        </button>
-                    </form>
-                </div>
-            </div>
-        </div>
-
-        <div class="col-lg-8">
-            <div class="card custom-card h-100">
-                <div class="card-header bg-transparent border-0 pt-4 pb-0 d-flex justify-content-between align-items-center">
-                    <h5 class="card-title fw-bold"><i class="bi bi-list-ul"></i> Redes Autorizadas</h5>
-                    <button class="btn btn-sm btn-outline-secondary" onclick="loadNetworks()">
-                        <i class="bi bi-arrow-clockwise"></i> Atualizar
+            <div id="tab-wifi" class="dashboard-tab">
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <h2 class="fw-bold text-dark"><i class="bi bi-router"></i> Redes Autorizadas</h2>
+                    <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#csvModal">
+                        <i class="bi bi-filetype-csv"></i> Importar CSV
                     </button>
                 </div>
-                <div class="card-body">
-                    <div class="table-responsive">
+
+                <div class="card custom-card">
+                    <div class="card-body">
                         <table class="table table-hover align-middle">
                             <thead class="table-light">
                             <tr>
@@ -73,22 +52,88 @@
                                 <th class="text-end">Ações</th>
                             </tr>
                             </thead>
-                            <tbody id="networkTableBody">
-                            </tbody>
+                            <tbody id="networkTableBody"></tbody>
                         </table>
-                    </div>
-
-                    <div id="emptyState" class="text-center py-5 text-muted d-none">
-                        <i class="bi bi-wifi-off fs-1"></i>
-                        <p class="mt-2">Nenhuma rede registada ainda.</p>
                     </div>
                 </div>
             </div>
-        </div>
 
+            <div id="tab-users" class="dashboard-tab d-none">
+                <h2 class="fw-bold text-dark mb-4"><i class="bi bi-people"></i> Gestão de Acessos</h2>
+
+                <div class="card custom-card">
+                    <div class="card-body">
+                        <table class="table table-hover align-middle">
+                            <thead class="table-light">
+                            <tr>
+                                <th>Nome</th>
+                                <th>App</th>
+                                <th>Status</th>
+                                <th>Validade</th>
+                                <th class="text-end">Ações</th>
+                            </tr>
+                            </thead>
+                            <tbody id="usersTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+        </div>
     </div>
 </div>
 
+<div class="modal fade" id="csvModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-upload"></i> Importar Redes (CSV)</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted small">O arquivo deve conter as colunas: <b>SSID, Senha, Localização</b> separadas por vírgula ou ponto-e-vírgula.</p>
+                <input type="file" id="csvFileInput" class="form-control" accept=".csv">
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-success" onclick="uploadCsv()">Importar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="approveModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-check-circle"></i> Aprovar Usuário</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="approveUserId">
+
+                <div class="mb-3">
+                    <label class="form-label text-primary fw-bold">Credenciais do ThingsBoard do Usuário</label>
+                    <input type="text" id="tbUrl" class="form-control mb-2" placeholder="URL (ex: http://10.5.0.66:8080)">
+                    <input type="text" id="tbUser" class="form-control mb-2" placeholder="E-mail do ThingsBoard">
+                    <input type="password" id="tbPass" class="form-control" placeholder="Senha do ThingsBoard">
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label text-danger fw-bold">Validade do Acesso (Opcional)</label>
+                    <input type="datetime-local" id="expirationDate" class="form-control">
+                    <small class="text-muted">Deixe em branco para acesso vitalício.</small>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-success" onclick="confirmApproval()">Confirmar Aprovação</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script src="/js/app.js"></script>
 </body>
 </html>
