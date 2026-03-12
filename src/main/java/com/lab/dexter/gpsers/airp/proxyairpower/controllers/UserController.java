@@ -1,5 +1,6 @@
 package com.lab.dexter.gpsers.airp.proxyairpower.controllers;
 
+import com.lab.dexter.gpsers.airp.proxyairpower.config.CryptoUtil;
 import com.lab.dexter.gpsers.airp.proxyairpower.entities.AppClient;
 import com.lab.dexter.gpsers.airp.proxyairpower.entities.AppUser;
 import com.lab.dexter.gpsers.airp.proxyairpower.entities.UserStatus;
@@ -18,7 +19,7 @@ import java.util.Optional;
 
 @RestController
 @RequestMapping("/api/users")
-@CrossOrigin(origins = "*") // Permite que o Painel Web aceda
+@CrossOrigin(origins = "*")
 public class UserController {
 
     @Autowired
@@ -30,7 +31,7 @@ public class UserController {
     @Autowired
     private PasswordEncoder passwordEncoder;
 
-    // --- 1. REGISTAR (O que já tínhamos) ---
+    // --- 1. REGISTAR ---
     @PostMapping("/register")
     public ResponseEntity<?> registerUser(@RequestBody Map<String, String> payload) {
         String email = payload.get("email");
@@ -38,10 +39,12 @@ public class UserController {
         String name = payload.get("name");
         String appName = payload.get("appName");
 
+        // 1. Verifica se o email já existe
         if (userRepository.findByEmail(email).isPresent()) {
             return ResponseEntity.badRequest().body("Erro: Email já registado.");
         }
 
+        // 2. Verifica se o Aplicativo é válido
         Optional<AppClient> clientOpt = clientRepository.findByName(appName);
         if (clientOpt.isEmpty()) {
             return ResponseEntity.badRequest().body("Erro: Aplicativo inválido.");
@@ -51,28 +54,39 @@ public class UserController {
         AppUser newUser = new AppUser();
         newUser.setName(name);
         newUser.setEmail(email);
-        newUser.setPassword(passwordEncoder.encode(password));
+        newUser.setPassword(passwordEncoder.encode(password)); // BCrypt para a senha da nossa API
         newUser.setAppClient(client);
 
+        // 3. A REGRA DE OURO DA APROVAÇÃO
         if (client.getName().equals("Airpower_Admin")) {
             newUser.setStatus(UserStatus.PENDING);
         } else {
             newUser.setStatus(UserStatus.APPROVED);
         }
 
+        // 4. DADOS DINÂMICOS DO THINGSBOARD (Se o utilizador os enviar no registo)
+        if (payload.containsKey("tbUrl")) {
+            newUser.setTbUrl(payload.get("tbUrl"));
+        }
+        if (payload.containsKey("tbUsername")) {
+            newUser.setTbUsername(payload.get("tbUsername"));
+        }
+        if (payload.containsKey("tbPassword")) {
+            // Tranca a senha do ThingsBoard com AES de dupla via!
+            newUser.setTbPassword(CryptoUtil.encrypt(payload.get("tbPassword")));
+        }
+
         userRepository.save(newUser);
         return ResponseEntity.ok("Utilizador registado com sucesso. Status: " + newUser.getStatus());
     }
 
-    // --- OS MÉTODOS NOVOS (Para fechar a checklist) ---
-
-    // 2. LISTAR TODOS OS USUÁRIOS (Para o Painel Web)
+    // --- 2. LISTAR TODOS OS USUÁRIOS ---
     @GetMapping
     public List<AppUser> getAllUsers() {
         return userRepository.findAll();
     }
 
-    // 3. APROVAR UM USUÁRIO E DEFINIR VALIDADE
+    // --- 3. APROVAR UM USUÁRIO E DEFINIR VALIDADE ---
     @PutMapping("/{id}/approve")
     public ResponseEntity<?> approveUser(@PathVariable Long id, @RequestBody Map<String, String> payload) {
         Optional<AppUser> userOpt = userRepository.findById(id);
@@ -83,19 +97,23 @@ public class UserController {
         AppUser user = userOpt.get();
         user.setStatus(UserStatus.APPROVED);
 
-        // Verifica se o Admin enviou uma data de validade (formato ISO: 2026-12-31T23:59:59)
         if (payload.containsKey("expirationDate") && payload.get("expirationDate") != null) {
             LocalDateTime expDate = LocalDateTime.parse(payload.get("expirationDate"), DateTimeFormatter.ISO_DATE_TIME);
             user.setExpirationDate(expDate);
         } else {
-            user.setExpirationDate(null); // Sem data limite (acesso vitalício)
+            user.setExpirationDate(null);
         }
+
+        // Se o admin quiser atualizar os dados do ThingsBoard no momento da aprovação
+        if (payload.containsKey("tbUrl")) user.setTbUrl(payload.get("tbUrl"));
+        if (payload.containsKey("tbUsername")) user.setTbUsername(payload.get("tbUsername"));
+        if (payload.containsKey("tbPassword")) user.setTbPassword(CryptoUtil.encrypt(payload.get("tbPassword")));
 
         userRepository.save(user);
         return ResponseEntity.ok("Usuário aprovado com sucesso!");
     }
 
-    // 4. MUDAR STATUS (Banir, Rejeitar, etc.)
+    // --- 4. MUDAR STATUS (Banir, Rejeitar, etc.) ---
     @PutMapping("/{id}/status")
     public ResponseEntity<?> changeUserStatus(@PathVariable Long id, @RequestBody Map<String, String> payload) {
         Optional<AppUser> userOpt = userRepository.findById(id);
@@ -104,7 +122,7 @@ public class UserController {
         }
 
         AppUser user = userOpt.get();
-        String newStatus = payload.get("status"); // PENDING, APPROVED, REJECTED, BANNED
+        String newStatus = payload.get("status");
 
         try {
             user.setStatus(UserStatus.valueOf(newStatus.toUpperCase()));
