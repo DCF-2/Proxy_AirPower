@@ -44,7 +44,7 @@ subgraph Device Layer
 end
 
 subgraph Backend Layer
-    API[⚙️ AirPower API<br>Spring Boot<br>BFF + IAM]
+    API[⚙️ Proxy_AirPower <br>Spring Boot<br>BFF + IAM]
 end
 
 subgraph IoT Platform
