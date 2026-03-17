@@ -78,7 +78,12 @@ public class AuthProxyController {
                     tbCredentials,
                     Map.class
             );
+            // Verifica se o corpo é nulo antes de enviar para o Android
+            if (tbResponse.getBody() == null || !tbResponse.getBody().containsKey("token")) {
+                return ResponseEntity.status(502).body(Map.of("error", "O ThingsBoard não retornou um token válido."));
+            }
 
+            // O Android espera o token dentro de uma chave "token"
             return ResponseEntity.ok(tbResponse.getBody());
 
         } catch (Exception e) {
