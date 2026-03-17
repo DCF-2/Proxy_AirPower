@@ -83,6 +83,10 @@ public class AuthProxyController {
                 return ResponseEntity.status(502).body(Map.of("error", "O ThingsBoard não retornou um token válido."));
             }
 
+            // Pegamos a resposta do ThingsBoard e adicionamos a URL real do usuário!
+            Map<String, Object> responseBody = new HashMap<>(tbResponse.getBody());
+            responseBody.put("tbUrl", dynamicTbUrl);
+
             // O Android espera o token dentro de uma chave "token"
             return ResponseEntity.ok(tbResponse.getBody());
 
