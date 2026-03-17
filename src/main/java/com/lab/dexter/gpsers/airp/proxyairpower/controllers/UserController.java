@@ -91,26 +91,46 @@ public class UserController {
     public ResponseEntity<?> approveUser(@PathVariable Long id, @RequestBody Map<String, String> payload) {
         Optional<AppUser> userOpt = userRepository.findById(id);
         if (userOpt.isEmpty()) {
-            return ResponseEntity.notFound().build();
+            return ResponseEntity.status(404).body(Map.of("error", "Usuário não encontrado."));
         }
 
         AppUser user = userOpt.get();
         user.setStatus(UserStatus.APPROVED);
 
-        if (payload.containsKey("expirationDate") && payload.get("expirationDate") != null) {
-            LocalDateTime expDate = LocalDateTime.parse(payload.get("expirationDate"), DateTimeFormatter.ISO_DATE_TIME);
-            user.setExpirationDate(expDate);
-        } else {
-            user.setExpirationDate(null);
+        try {
+            // Tratamento seguro de Data
+            if (payload.containsKey("expirationDate")) {
+                String expDateStr = payload.get("expirationDate");
+                if (expDateStr != null && !expDateStr.trim().isEmpty()) {
+                    LocalDateTime expDate = LocalDateTime.parse(expDateStr, DateTimeFormatter.ISO_DATE_TIME);
+                    user.setExpirationDate(expDate);
+                } else {
+                    user.setExpirationDate(null);
+                }
+            }
+
+            // Tratamento seguro de Strings
+            if (payload.containsKey("tbUrl") && payload.get("tbUrl") != null) {
+                user.setTbUrl(payload.get("tbUrl"));
+            }
+            if (payload.containsKey("tbUsername") && payload.get("tbUsername") != null) {
+                user.setTbUsername(payload.get("tbUsername"));
+            }
+            if (payload.containsKey("tbPassword")) {
+                String pass = payload.get("tbPassword");
+                if (pass != null && !pass.trim().isEmpty()) {
+                    user.setTbPassword(CryptoUtil.encrypt(pass));
+                }
+            }
+
+            userRepository.save(user);
+            // Retorna formato JSON válido para o Android/Web não quebrar!
+            return ResponseEntity.ok(Map.of("message", "Usuário aprovado com sucesso!"));
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            return ResponseEntity.badRequest().body(Map.of("error", "Erro ao processar dados: " + e.getMessage()));
         }
-
-        // Se o admin quiser atualizar os dados do ThingsBoard no momento da aprovação
-        if (payload.containsKey("tbUrl")) user.setTbUrl(payload.get("tbUrl"));
-        if (payload.containsKey("tbUsername")) user.setTbUsername(payload.get("tbUsername"));
-        if (payload.containsKey("tbPassword")) user.setTbPassword(CryptoUtil.encrypt(payload.get("tbPassword")));
-
-        userRepository.save(user);
-        return ResponseEntity.ok("Usuário aprovado com sucesso!");
     }
 
     // --- 4. MUDAR STATUS (Banir, Rejeitar, etc.) ---
@@ -118,18 +138,22 @@ public class UserController {
     public ResponseEntity<?> changeUserStatus(@PathVariable Long id, @RequestBody Map<String, String> payload) {
         Optional<AppUser> userOpt = userRepository.findById(id);
         if (userOpt.isEmpty()) {
-            return ResponseEntity.notFound().build();
+            return ResponseEntity.status(404).body(Map.of("error", "Usuário não encontrado."));
         }
 
         AppUser user = userOpt.get();
         String newStatus = payload.get("status");
 
         try {
-            user.setStatus(UserStatus.valueOf(newStatus.toUpperCase()));
-            userRepository.save(user);
-            return ResponseEntity.ok("Status alterado para " + user.getStatus());
+            if (newStatus != null && !newStatus.trim().isEmpty()) {
+                user.setStatus(UserStatus.valueOf(newStatus.toUpperCase()));
+                userRepository.save(user);
+                return ResponseEntity.ok(Map.of("message", "Status alterado para " + user.getStatus()));
+            } else {
+                return ResponseEntity.badRequest().body(Map.of("error", "Status não pode estar vazio."));
+            }
         } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().body("Status inválido.");
+            return ResponseEntity.badRequest().body(Map.of("error", "Status inválido."));
         }
     }
 
@@ -137,25 +161,44 @@ public class UserController {
     @PutMapping("/{id}")
     public ResponseEntity<?> editUser(@PathVariable Long id, @RequestBody Map<String, String> payload) {
         Optional<AppUser> userOpt = userRepository.findById(id);
-        if (userOpt.isEmpty()) return ResponseEntity.notFound().build();
+        if (userOpt.isEmpty()) {
+            return ResponseEntity.status(404).body(Map.of("error", "Usuário não encontrado."));
+        }
 
         AppUser user = userOpt.get();
 
-        // Atualiza Validade
-        if (payload.containsKey("expirationDate") && !payload.get("expirationDate").isEmpty()) {
-            user.setExpirationDate(LocalDateTime.parse(payload.get("expirationDate"), DateTimeFormatter.ISO_DATE_TIME));
-        } else if (payload.containsKey("expirationDate")) {
-            user.setExpirationDate(null); // Remove a validade (vitalício)
-        }
+        try {
+            // Atualiza Validade de forma segura
+            if (payload.containsKey("expirationDate")) {
+                String expDateStr = payload.get("expirationDate");
+                if (expDateStr != null && !expDateStr.trim().isEmpty()) {
+                    user.setExpirationDate(LocalDateTime.parse(expDateStr, DateTimeFormatter.ISO_DATE_TIME));
+                } else {
+                    user.setExpirationDate(null); // Remove a validade (vitalício)
+                }
+            }
 
-        // Atualiza Credenciais do TB
-        if (payload.containsKey("tbUrl")) user.setTbUrl(payload.get("tbUrl"));
-        if (payload.containsKey("tbUsername")) user.setTbUsername(payload.get("tbUsername"));
-        if (payload.containsKey("tbPassword") && !payload.get("tbPassword").isEmpty()) {
-            user.setTbPassword(CryptoUtil.encrypt(payload.get("tbPassword")));
-        }
+            // Atualiza Credenciais do TB de forma segura
+            if (payload.containsKey("tbUrl") && payload.get("tbUrl") != null) {
+                user.setTbUrl(payload.get("tbUrl"));
+            }
+            if (payload.containsKey("tbUsername") && payload.get("tbUsername") != null) {
+                user.setTbUsername(payload.get("tbUsername"));
+            }
+            if (payload.containsKey("tbPassword")) {
+                String pass = payload.get("tbPassword");
+                if (pass != null && !pass.trim().isEmpty()) {
+                    user.setTbPassword(CryptoUtil.encrypt(pass));
+                }
+            }
 
-        userRepository.save(user);
-        return ResponseEntity.ok("Usuário atualizado com sucesso!");
+            userRepository.save(user);
+            // Retorna JSON!
+            return ResponseEntity.ok(Map.of("message", "Usuário atualizado com sucesso!"));
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            return ResponseEntity.badRequest().body(Map.of("error", "Erro ao atualizar usuário: " + e.getMessage()));
+        }
     }
 }
