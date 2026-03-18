@@ -87,8 +87,8 @@ public class AuthProxyController {
             Map<String, Object> responseBody = new HashMap<>(tbResponse.getBody());
             responseBody.put("tbUrl", dynamicTbUrl);
 
-            // O Android espera o token dentro de uma chave "token"
-            return ResponseEntity.ok(tbResponse.getBody());
+            // ---> RETORNA O responseBody COM A URL DENTRO! <---
+            return ResponseEntity.ok(responseBody);
 
         } catch (Exception e) {
             return ResponseEntity.status(502).body(Map.of("error", "Erro ao comunicar com o servidor ThingsBoard em: " + dynamicTbUrl));
