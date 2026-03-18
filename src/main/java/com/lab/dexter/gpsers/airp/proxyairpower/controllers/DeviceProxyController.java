@@ -111,25 +111,21 @@ public class DeviceProxyController {
         }
     }
 
-    // 4. SALVAR LOCALIZAÇÃO (O MÉTODO QUE FALTAVA NO PROXY!)
+    // 4. SALVAR LOCALIZAÇÃO NA TELEMETRIA
     @PostMapping("/device/{deviceId}/location")
     public ResponseEntity<?> saveDeviceLocation(
             @RequestHeader("Authorization") String token,
             @RequestHeader("X-User-Email") String email,
             @PathVariable String deviceId,
-            @RequestBody String locationPayload) { // Recebe o DTO do Android como String JSON
+            @RequestBody String locationPayload) { // Recebe o DTO do Android
 
         try {
-            // 1. Pega a URL real do ThingsBoard
             String tbUrl = getDynamicTbUrl(email);
             RestTemplate restTemplate = new RestTemplate();
             HttpEntity<String> entity = new HttpEntity<>(locationPayload, createHeaders(token));
 
-            // 2. Monta o destino final no ThingsBoard
-            // (No ThingsBoard, os dados como descrição/GPS são salvos como Atributos de Servidor)
-            String targetUrl = tbUrl + "/api/plugins/telemetry/DEVICE/" + deviceId + "/SERVER_SCOPE";
+            String targetUrl = tbUrl + "/api/plugins/telemetry/DEVICE/" + deviceId + "/timeseries/ANY";
 
-            // 3. Dispara o pedido
             ResponseEntity<String> response = restTemplate.exchange(targetUrl, HttpMethod.POST, entity, String.class);
             return ResponseEntity.ok(response.getBody());
 
