@@ -110,4 +110,31 @@ public class DeviceProxyController {
             return ResponseEntity.status(502).body("Erro Gateway (Get Credentials): " + e.getMessage());
         }
     }
+
+    // 4. SALVAR LOCALIZAÇÃO (O MÉTODO QUE FALTAVA NO PROXY!)
+    @PostMapping("/device/{deviceId}/location")
+    public ResponseEntity<?> saveDeviceLocation(
+            @RequestHeader("Authorization") String token,
+            @RequestHeader("X-User-Email") String email,
+            @PathVariable String deviceId,
+            @RequestBody String locationPayload) { // Recebe o DTO do Android como String JSON
+
+        try {
+            // 1. Pega a URL real do ThingsBoard
+            String tbUrl = getDynamicTbUrl(email);
+            RestTemplate restTemplate = new RestTemplate();
+            HttpEntity<String> entity = new HttpEntity<>(locationPayload, createHeaders(token));
+
+            // 2. Monta o destino final no ThingsBoard
+            // (No ThingsBoard, os dados como descrição/GPS são salvos como Atributos de Servidor)
+            String targetUrl = tbUrl + "/api/plugins/telemetry/DEVICE/" + deviceId + "/SERVER_SCOPE";
+
+            // 3. Dispara o pedido
+            ResponseEntity<String> response = restTemplate.exchange(targetUrl, HttpMethod.POST, entity, String.class);
+            return ResponseEntity.ok(response.getBody());
+
+        } catch (Exception e) {
+            return ResponseEntity.status(502).body("Erro Gateway (Save Location): " + e.getMessage());
+        }
+    }
 }
