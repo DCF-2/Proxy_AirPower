@@ -133,4 +133,28 @@ public class DeviceProxyController {
             return ResponseEntity.status(502).body("Erro Gateway (Save Location): " + e.getMessage());
         }
     }
+
+    // 5. BUSCAR A ÚLTIMA TELEMETRIA (GPS PARA O MAPA)
+    @GetMapping("/device/{deviceId}/telemetry/latest")
+    public ResponseEntity<?> getLatestTelemetry(
+            @RequestHeader("Authorization") String token,
+            @RequestHeader("X-User-Email") String email,
+            @PathVariable String deviceId,
+            @RequestParam("keys") String keys) { // Ex: "latitude,longitude"
+
+        try {
+            String tbUrl = getDynamicTbUrl(email);
+            RestTemplate restTemplate = new RestTemplate();
+            HttpEntity<String> entity = new HttpEntity<>(createHeaders(token));
+
+            // URL oficial do ThingsBoard para pegar a última telemetria de chaves específicas
+            String targetUrl = tbUrl + "/api/plugins/telemetry/DEVICE/" + deviceId + "/values/timeseries?keys=" + keys;
+
+            ResponseEntity<String> response = restTemplate.exchange(targetUrl, HttpMethod.GET, entity, String.class);
+            return ResponseEntity.ok(response.getBody());
+
+        } catch (Exception e) {
+            return ResponseEntity.status(502).body("Erro Gateway (Get Telemetry): " + e.getMessage());
+        }
+    }
 }
