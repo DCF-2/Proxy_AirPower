@@ -157,4 +157,30 @@ public class DeviceProxyController {
             return ResponseEntity.status(502).body("Erro Gateway (Get Telemetry): " + e.getMessage());
         }
     }
+
+    // 6. BUSCAR LISTA DE DASHBOARDS DO TENANT
+    @GetMapping("/tenant/dashboards")
+    public ResponseEntity<?> getDashboards(
+            @RequestHeader("Authorization") String token,
+            @RequestHeader("X-User-Email") String email,
+            @RequestParam(defaultValue = "100") int pageSize,
+            @RequestParam(defaultValue = "0") int page) {
+
+        try {
+            String tbUrl = getDynamicTbUrl(email);
+            RestTemplate restTemplate = new RestTemplate();
+
+            // Passa o Token do Admin para o ThingsBoard
+            HttpEntity<String> entity = new HttpEntity<>(createHeaders(token));
+
+            // URL oficial do ThingsBoard para listar os Dashboards
+            String targetUrl = tbUrl + "/api/tenant/dashboards?pageSize=" + pageSize + "&page=" + page;
+
+            ResponseEntity<String> response = restTemplate.exchange(targetUrl, HttpMethod.GET, entity, String.class);
+            return ResponseEntity.ok(response.getBody());
+
+        } catch (Exception e) {
+            return ResponseEntity.status(502).body("Erro Gateway (Get Dashboards): " + e.getMessage());
+        }
+    }
 }
