@@ -3,10 +3,7 @@ package com.lab.dexter.gpsers.airp.proxyairpower.controllers;
 import com.lab.dexter.gpsers.airp.proxyairpower.entities.AppUser;
 import com.lab.dexter.gpsers.airp.proxyairpower.repositories.AppUserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.HttpEntity;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpMethod;
-import org.springframework.http.ResponseEntity;
+import org.springframework.http.*;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.client.RestTemplate;
 
@@ -181,6 +178,33 @@ public class DeviceProxyController {
 
         } catch (Exception e) {
             return ResponseEntity.status(502).body("Erro Gateway (Get Dashboards): " + e.getMessage());
+        }
+    }
+
+    // 7. ENVIAR COMANDO RPC PARA A ESP32 (CONTROLE REMOTO)
+    @PostMapping("/device/{deviceId}/rpc")
+    public ResponseEntity<?> sendRpcCommand(
+            @RequestHeader("Authorization") String token,
+            @RequestHeader("X-User-Email") String email,
+            @PathVariable String deviceId,
+            @RequestBody String rpcPayload) { // O payload será algo como {"method": "setPower", "params": true}
+
+        try {
+            String tbUrl = getDynamicTbUrl(email);
+            RestTemplate restTemplate = new RestTemplate();
+
+            HttpHeaders headers = createHeaders(token);
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            HttpEntity<String> entity = new HttpEntity<>(rpcPayload, headers);
+
+            // API oficial do ThingsBoard para RPC Two-Way (espera resposta da placa)
+            String targetUrl = tbUrl + "/api/plugins/rpc/twoway/" + deviceId;
+
+            ResponseEntity<String> response = restTemplate.exchange(targetUrl, HttpMethod.POST, entity, String.class);
+            return ResponseEntity.ok(response.getBody());
+
+        } catch (Exception e) {
+            return ResponseEntity.status(502).body("Erro ao enviar comando RPC: " + e.getMessage());
         }
     }
 }
