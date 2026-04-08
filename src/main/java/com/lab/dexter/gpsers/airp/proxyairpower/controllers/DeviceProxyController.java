@@ -131,21 +131,27 @@ public class DeviceProxyController {
         }
     }
 
-    // 5. BUSCAR A ÚLTIMA TELEMETRIA (GPS PARA O MAPA)
+    // 5. BUSCAR A ÚLTIMA TELEMETRIA (MAPA E DASHBOARD DINÂMICO)
     @GetMapping("/device/{deviceId}/telemetry/latest")
     public ResponseEntity<?> getLatestTelemetry(
             @RequestHeader("Authorization") String token,
             @RequestHeader("X-User-Email") String email,
             @PathVariable String deviceId,
-            @RequestParam("keys") String keys) { // Ex: "latitude,longitude"
+            @RequestParam(value = "keys", required = false) String keys) { // Agora é OPCIONAL!
 
         try {
             String tbUrl = getDynamicTbUrl(email);
             RestTemplate restTemplate = new RestTemplate();
             HttpEntity<String> entity = new HttpEntity<>(createHeaders(token));
 
-            // URL oficial do ThingsBoard para pegar a última telemetria de chaves específicas
-            String targetUrl = tbUrl + "/api/plugins/telemetry/DEVICE/" + deviceId + "/values/timeseries?keys=" + keys;
+            // URL base oficial do ThingsBoard para pegar a última telemetria
+            String targetUrl = tbUrl + "/api/plugins/telemetry/DEVICE/" + deviceId + "/values/timeseries";
+
+            // Se as chaves foram passadas (ex: Mapa pedindo lat,lon), adiciona na URL
+            // Se não (Dashboard nativo querendo tudo), a URL fica limpa e o TB devolve TUDO!
+            if (keys != null && !keys.trim().isEmpty()) {
+                targetUrl += "?keys=" + keys;
+            }
 
             ResponseEntity<String> response = restTemplate.exchange(targetUrl, HttpMethod.GET, entity, String.class);
             return ResponseEntity.ok(response.getBody());
