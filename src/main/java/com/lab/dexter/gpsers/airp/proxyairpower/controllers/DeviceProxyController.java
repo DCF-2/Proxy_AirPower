@@ -17,7 +17,9 @@ public class DeviceProxyController {
     @Autowired
     private AppUserRepository userRepository;
 
-    // --- MÉTODOS AUXILIARES ---
+    // ==========================================
+    // MÉTODOS AUXILIARES
+    // ==========================================
 
     // 1. Prepara a "mala" com o Token do Android para enviar ao ThingsBoard
     private HttpHeaders createHeaders(String token) {
@@ -37,13 +39,15 @@ public class DeviceProxyController {
         throw new RuntimeException("Utilizador não encontrado ou TB URL não configurada no banco.");
     }
 
-    // --- ROTAS DE ESPELHO (O GATEWAY) ---
+    // ==========================================
+    // ROTAS DE ESPELHO (O GATEWAY)
+    // ==========================================
 
-    // 1. BUSCAR DISPOSITIVOS
+    // 1. BUSCAR DISPOSITIVOS (Rota antiga sem status, mantida por compatibilidade)
     @GetMapping("/tenant/devices")
     public ResponseEntity<?> getDevices(
             @RequestHeader("Authorization") String token,
-            @RequestHeader("X-User-Email") String email, // O Android vai mandar isto!
+            @RequestHeader("X-User-Email") String email,
             @RequestParam(defaultValue = "10000") int pageSize,
             @RequestParam(defaultValue = "0") int page) {
 
@@ -52,10 +56,8 @@ public class DeviceProxyController {
             RestTemplate restTemplate = new RestTemplate();
             HttpEntity<String> entity = new HttpEntity<>(createHeaders(token));
 
-            // Monta o destino final
             String targetUrl = tbUrl + "/api/tenant/devices?pageSize=" + pageSize + "&page=" + page;
 
-            // Dispara o pedido
             ResponseEntity<String> response = restTemplate.exchange(targetUrl, HttpMethod.GET, entity, String.class);
             return ResponseEntity.ok(response.getBody());
 
@@ -69,7 +71,7 @@ public class DeviceProxyController {
     public ResponseEntity<?> createDevice(
             @RequestHeader("Authorization") String token,
             @RequestHeader("X-User-Email") String email,
-            @RequestBody String devicePayload) { // Recebe o JSON exato que o Android mandar
+            @RequestBody String devicePayload) {
 
         try {
             String tbUrl = getDynamicTbUrl(email);
@@ -114,7 +116,7 @@ public class DeviceProxyController {
             @RequestHeader("Authorization") String token,
             @RequestHeader("X-User-Email") String email,
             @PathVariable String deviceId,
-            @RequestBody String locationPayload) { // Recebe o DTO do Android
+            @RequestBody String locationPayload) {
 
         try {
             String tbUrl = getDynamicTbUrl(email);
@@ -144,13 +146,28 @@ public class DeviceProxyController {
             RestTemplate restTemplate = new RestTemplate();
             HttpEntity<String> entity = new HttpEntity<>(createHeaders(token));
 
-            // URL base oficial do ThingsBoard para pegar a última telemetria
-            String targetUrl = tbUrl + "/api/plugins/telemetry/DEVICE/" + deviceId + "/values/timeseries";
+            String targetUrl;
 
-            // Se as chaves foram passadas (ex: Mapa pedindo lat,lon), adiciona na URL
-            // Se não (Dashboard nativo querendo tudo), a URL fica limpa e o TB devolve TUDO!
+            // LÓGICA INTELIGENTE DE ROTEAMENTO
             if (keys != null && !keys.trim().isEmpty()) {
-                targetUrl += "?keys=" + keys;
+                // Cenário A: O Android pediu chaves específicas (ex: "latitude,longitude" para o Mapa)
+                targetUrl = tbUrl + "/api/plugins/telemetry/DEVICE/" + deviceId + "/values/timeseries?keys=" + keys;
+            } else {
+                // Cenário B: O Android quer o Dashboard Completo (todas as chaves)
+
+                // Primeiro: Descobrimos quais são todas as chaves de telemetria desta placa
+                String keysUrl = tbUrl + "/api/plugins/telemetry/DEVICE/" + deviceId + "/keys/timeseries";
+                ResponseEntity<String[]> keysResponse = restTemplate.exchange(keysUrl, HttpMethod.GET, entity, String[].class);
+
+                String[] availableKeys = keysResponse.getBody();
+
+                if (availableKeys == null || availableKeys.length == 0) {
+                    return ResponseEntity.ok("{}"); // A placa não tem dados
+                }
+
+                // Segundo: Montamos a string de chaves e fazemos o pedido final para obter os valores
+                String allKeysString = String.join(",", availableKeys);
+                targetUrl = tbUrl + "/api/plugins/telemetry/DEVICE/" + deviceId + "/values/timeseries?keys=" + allKeysString;
             }
 
             ResponseEntity<String> response = restTemplate.exchange(targetUrl, HttpMethod.GET, entity, String.class);
@@ -173,10 +190,8 @@ public class DeviceProxyController {
             String tbUrl = getDynamicTbUrl(email);
             RestTemplate restTemplate = new RestTemplate();
 
-            // Passa o Token do Admin para o ThingsBoard
             HttpEntity<String> entity = new HttpEntity<>(createHeaders(token));
 
-            // URL oficial do ThingsBoard para listar os Dashboards
             String targetUrl = tbUrl + "/api/tenant/dashboards?pageSize=" + pageSize + "&page=" + page;
 
             ResponseEntity<String> response = restTemplate.exchange(targetUrl, HttpMethod.GET, entity, String.class);
@@ -193,7 +208,7 @@ public class DeviceProxyController {
             @RequestHeader("Authorization") String token,
             @RequestHeader("X-User-Email") String email,
             @PathVariable String deviceId,
-            @RequestBody String rpcPayload) { // O payload será algo como {"method": "setPower", "params": true}
+            @RequestBody String rpcPayload) {
 
         try {
             String tbUrl = getDynamicTbUrl(email);
@@ -203,7 +218,7 @@ public class DeviceProxyController {
             headers.setContentType(MediaType.APPLICATION_JSON);
             HttpEntity<String> entity = new HttpEntity<>(rpcPayload, headers);
 
-            // API oficial do ThingsBoard para RPC Two-Way (espera resposta da placa)
+            // API oficial do ThingsBoard para RPC Two-Way
             String targetUrl = tbUrl + "/api/plugins/rpc/twoway/" + deviceId;
 
             ResponseEntity<String> response = restTemplate.exchange(targetUrl, HttpMethod.POST, entity, String.class);
@@ -211,6 +226,28 @@ public class DeviceProxyController {
 
         } catch (Exception e) {
             return ResponseEntity.status(502).body("Erro ao enviar comando RPC: " + e.getMessage());
+        }
+    }
+
+    // 8. BUSCAR LISTA DE DISPOSITIVOS COM STATUS ONLINE/OFFLINE (DeviceInfo)
+    @GetMapping("/devices")
+    public ResponseEntity<?> getDevicesWithStatus(
+            @RequestHeader("Authorization") String token,
+            @RequestHeader("X-User-Email") String email) {
+
+        try {
+            String tbUrl = getDynamicTbUrl(email);
+            RestTemplate restTemplate = new RestTemplate();
+            HttpEntity<String> entity = new HttpEntity<>(createHeaders(token));
+
+            // A MÁGICA ESTÁ AQUI: Usar 'deviceInfos' em vez de 'devices'
+            String targetUrl = tbUrl + "/api/tenant/deviceInfos?pageSize=100&page=0";
+
+            ResponseEntity<String> response = restTemplate.exchange(targetUrl, HttpMethod.GET, entity, String.class);
+            return ResponseEntity.ok(response.getBody());
+
+        } catch (Exception e) {
+            return ResponseEntity.status(502).body("Erro Gateway (Get DeviceInfos): " + e.getMessage());
         }
     }
 }
