@@ -7,9 +7,18 @@ services:
     ports:
       - "8080:8080"
     environment:
+      # --- BANCO DE DADOS ---
       # ATENÇÃO: Se o PostgreSQL estiver a correr diretamente na máquina física (Host),
       # use host.docker.internal ou o IP da rede local em vez de 'localhost'.
       - SPRING_DATASOURCE_URL=jdbc:postgresql://10.5.0.68:5434/airpower
       - SPRING_DATASOURCE_USERNAME=postgres
       - SPRING_DATASOURCE_PASSWORD=root
+
+      # --- SEGURANÇA (Adicionado agora) ---
+      # Chave AES de exatamente 16 caracteres para o CryptoUtil.java
+      - AIRPOWER_CRYPTO_KEY=Xj9@pL2#vK8!mQ5z
+
+      # Credenciais do Super Admin exigidas pelo SecurityConfig.java
+      - ADMIN_PANEL_USER=admin
+      - ADMIN_PANEL_PASS=admin123
     restart: always
