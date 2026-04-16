@@ -107,14 +107,24 @@ public class AuthProxyController {
             // INVOCAMOS O NOSSO REST TEMPLATE BLINDADO AQUI!
             RestTemplate restTemplate = createBlindRestTemplate();
 
+            // 1. FORÇA OS HEADERS DE JSON (Isso evita que o TB rejeite o corpo)
+            org.springframework.http.HttpHeaders headers = new org.springframework.http.HttpHeaders();
+            headers.setContentType(org.springframework.http.MediaType.APPLICATION_JSON);
+            headers.setAccept(java.util.Collections.singletonList(org.springframework.http.MediaType.APPLICATION_JSON));
+
+            // 2. MONTA AS CREDENCIAIS
             Map<String, String> tbCredentials = new HashMap<>();
             tbCredentials.put("username", dynamicTbUser);
             tbCredentials.put("password", dynamicTbPass);
 
-            // Bate no servidor (HTTPS) ignorando a data de validade do certificado!
+            org.springframework.http.HttpEntity<Map<String, String>> requestEntity = new org.springframework.http.HttpEntity<>(tbCredentials, headers);
+
+            System.out.println("🚀 [AuthProxyController] Mandando pro TB -> URL: " + dynamicTbUrl + " | User: " + dynamicTbUser);
+
+            // 3. Bate no servidor (HTTPS) ignorando a data de validade do certificado!
             ResponseEntity<Map> tbResponse = restTemplate.postForEntity(
                     dynamicTbUrl + "/api/auth/login",
-                    tbCredentials,
+                    requestEntity, // Usa a entidade com os Headers forçados!
                     Map.class
             );
 
