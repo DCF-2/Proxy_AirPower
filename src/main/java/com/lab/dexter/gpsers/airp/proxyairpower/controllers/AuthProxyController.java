@@ -6,10 +6,16 @@ import com.lab.dexter.gpsers.airp.proxyairpower.entities.UserStatus;
 import com.lab.dexter.gpsers.airp.proxyairpower.repositories.AppUserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.client.RestTemplate;
 
+import javax.net.ssl.HttpsURLConnection;
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.TrustManager;
+import javax.net.ssl.X509TrustManager;
+import java.net.HttpURLConnection;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
@@ -26,6 +32,37 @@ public class AuthProxyController {
     @Autowired
     private PasswordEncoder passwordEncoder;
 
+    // Método privado para criar um RestTemplate que ignora o certificado SSL expirado do ThingsBoard
+    private RestTemplate createBlindRestTemplate() {
+        try {
+            TrustManager[] trustAllCerts = new TrustManager[]{
+                    new X509TrustManager() {
+                        public java.security.cert.X509Certificate[] getAcceptedIssuers() { return null; }
+                        public void checkClientTrusted(java.security.cert.X509Certificate[] certs, String authType) { }
+                        public void checkServerTrusted(java.security.cert.X509Certificate[] certs, String authType) { }
+                    }
+            };
+
+            SSLContext sslContext = SSLContext.getInstance("TLS");
+            sslContext.init(null, trustAllCerts, new java.security.SecureRandom());
+
+            SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory() {
+                @Override
+                protected void prepareConnection(HttpURLConnection connection, String httpMethod) throws java.io.IOException {
+                    if (connection instanceof HttpsURLConnection) {
+                        ((HttpsURLConnection) connection).setHostnameVerifier((hostname, session) -> true);
+                        ((HttpsURLConnection) connection).setSSLSocketFactory(sslContext.getSocketFactory());
+                    }
+                    super.prepareConnection(connection, httpMethod);
+                }
+            };
+            return new RestTemplate(factory);
+        } catch (Exception e) {
+            e.printStackTrace();
+            return new RestTemplate(); // Fallback de emergência
+        }
+    }
+
     @PostMapping("/login")
     public ResponseEntity<?> login(@RequestBody Map<String, String> credentials) {
         String email = credentials.get("email");
@@ -39,67 +76,58 @@ public class AuthProxyController {
 
         AppUser user = userOpt.get();
 
-        // 2. Valida a senha da nossa API (BCrypt)
+        // 2. Valida a senha
         if (!passwordEncoder.matches(plainPassword, user.getPassword())) {
             return ResponseEntity.status(401).body(Map.of("error", "Senha incorreta."));
         }
 
-        // 3. Valida se está Aprovado
+        // 3. Valida Status
         if (user.getStatus() != UserStatus.APPROVED) {
             return ResponseEntity.status(403).body(Map.of("error", "Acesso negado. Status atual: " + user.getStatus()));
         }
 
-        // 4. Valida se expirou
+        // 4. Valida Expiração
         if (user.getExpirationDate() != null && user.getExpirationDate().isBefore(LocalDateTime.now())) {
             user.setStatus(UserStatus.BANNED);
             userRepository.save(user);
             return ResponseEntity.status(403).body(Map.of("error", "O seu tempo de acesso expirou."));
         }
 
-        // 5. Verifica se o utilizador tem as credenciais do ThingsBoard configuradas
+        // 5. Verifica credenciais TB
         if (user.getTbUrl() == null || user.getTbUsername() == null || user.getTbPassword() == null) {
-            return ResponseEntity.status(500).body(Map.of("error", "Credenciais do ThingsBoard não configuradas para este utilizador. Fale com o Administrador."));
+            return ResponseEntity.status(500).body(Map.of("error", "Credenciais do ThingsBoard não configuradas. Fale com o Administrador."));
         }
 
-        // 6. DINÂMICO: Pega os dados exatos deste utilizador e destranca a senha!
-        String dynamicTbUrl = user.getTbUrl();
-
-        if (dynamicTbUrl != null && (dynamicTbUrl.startsWith("https://10.") || dynamicTbUrl.startsWith("https://192."))) {
-            System.out.println("🔄 AVISO [AuthProxyController]: Interceptando URL de laboratório. Forçando HTTP para: " + dynamicTbUrl);
-            dynamicTbUrl = dynamicTbUrl.replace("https://", "http://");
-        }
-
+        // 6. Prepara conexão com ThingsBoard
+        String dynamicTbUrl = user.getTbUrl(); // Aqui VAI usar HTTPS
         String dynamicTbUser = user.getTbUsername();
-        String dynamicTbPass = CryptoUtil.decrypt(user.getTbPassword()); // Destranca a senha na hora!
+        String dynamicTbPass = CryptoUtil.decrypt(user.getTbPassword());
 
         try {
-            // Como forçamos HTTP, um RestTemplate padrão funciona perfeitamente!
-            RestTemplate restTemplate = new RestTemplate();
+            // INVOCAMOS O NOSSO REST TEMPLATE BLINDADO AQUI!
+            RestTemplate restTemplate = createBlindRestTemplate();
+
             Map<String, String> tbCredentials = new HashMap<>();
             tbCredentials.put("username", dynamicTbUser);
             tbCredentials.put("password", dynamicTbPass);
 
-            // Faz a requisição de login ao ThingsBoard dinâmico
+            // Bate no servidor (HTTPS) ignorando a data de validade do certificado!
             ResponseEntity<Map> tbResponse = restTemplate.postForEntity(
                     dynamicTbUrl + "/api/auth/login",
                     tbCredentials,
                     Map.class
             );
 
-            // Verifica se o corpo é nulo antes de enviar para o Android
             if (tbResponse.getBody() == null || !tbResponse.getBody().containsKey("token")) {
                 return ResponseEntity.status(502).body(Map.of("error", "O ThingsBoard não retornou um token válido."));
             }
 
-            // Pegamos a resposta do ThingsBoard e adicionamos a URL real do usuário!
             Map<String, Object> responseBody = new HashMap<>(tbResponse.getBody());
             responseBody.put("tbUrl", dynamicTbUrl);
 
-            // ---> RETORNA O responseBody COM A URL DENTRO! <---
             return ResponseEntity.ok(responseBody);
 
         } catch (Exception e) {
-            // Agora o Spring Boot vai gritar no log o motivo exato do erro!
             System.err.println("❌ ERRO [AuthProxyController]: Falha ao conectar no ThingsBoard: " + e.getMessage());
             return ResponseEntity.status(502).body(Map.of("error", "Erro ao conectar com o ThingsBoard: " + e.getMessage()));
         }
