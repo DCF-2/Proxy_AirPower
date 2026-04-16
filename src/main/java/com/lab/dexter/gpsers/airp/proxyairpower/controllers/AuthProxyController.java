@@ -137,9 +137,19 @@ public class AuthProxyController {
 
             return ResponseEntity.ok(responseBody);
 
+        } catch (org.springframework.web.client.HttpStatusCodeException e) {
+            // O ThingsBoard respondeu, mas foi um erro (ex: 401 Senha Errada)
+            System.err.println("⚠️ [AuthProxyController]: ThingsBoard recusou o login. Status: " + e.getStatusCode());
+
+            if (e.getStatusCode().value() == 401) {
+                return ResponseEntity.status(401).body(Map.of("error", "As credenciais do ThingsBoard salvas no banco estão incorretas. Atualize a senha do Tenant."));
+            }
+            return ResponseEntity.status(502).body(Map.of("error", "O ThingsBoard retornou erro: " + e.getStatusCode()));
+
         } catch (Exception e) {
-            System.err.println("❌ ERRO [AuthProxyController]: Falha ao conectar no ThingsBoard: " + e.getMessage());
-            return ResponseEntity.status(502).body(Map.of("error", "Erro ao conectar com o ThingsBoard: " + e.getMessage()));
+            // Erro de rede (cabo desconectado, servidor desligado, etc)
+            System.err.println("❌ ERRO [AuthProxyController]: Falha na rede ao conectar no ThingsBoard: " + e.getMessage());
+            return ResponseEntity.status(502).body(Map.of("error", "O servidor ThingsBoard (10.5.0.66) está offline ou inacessível."));
         }
     }
 }
