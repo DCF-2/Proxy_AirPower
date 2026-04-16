@@ -11,7 +11,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 @RestController
-@RequestMapping("/api/proxy/auth") // Ajustado para bater exatamente com a chamada do Android
+@RequestMapping("/api/auth") // Restabelecido para a rota original
 public class AuthController {
 
     private final AuthProxyService authService;
@@ -26,29 +26,26 @@ public class AuthController {
             @RequestHeader(value = "X-ThingsBoard-URL", required = false) String thingsboardUrl) {
 
         try {
-            // 1. Validação de Segurança (Feedback 400 - Bad Request)
+            // 1. Validação de Segurança
             if (thingsboardUrl == null || thingsboardUrl.isEmpty()) {
                 return buildErrorResponse(HttpStatus.BAD_REQUEST, "O cabeçalho X-ThingsBoard-URL é obrigatório.");
             }
 
-            // 2. A SANITIZAÇÃO IMPLACÁVEL (Resolve o bug do laboratório)
-            // Se a URL vier com HTTPS para um IP local (10.x.x.x ou 192.x.x.x), forçamos para HTTP
+            // 2. Sanitização Implacável (Resolve o bug do laboratório)
             if (thingsboardUrl.startsWith("https://10.") || thingsboardUrl.startsWith("https://192.")) {
                 System.out.println("🔄 AVISO [AuthController]: Interceptando URL de laboratório. Forçando HTTP para: " + thingsboardUrl);
                 thingsboardUrl = thingsboardUrl.replace("https://", "http://");
             }
 
-            // 3. Executa a autenticação real
+            // 3. Executa a autenticação
             AuthResponseDTO response = authService.authenticate(request, thingsboardUrl);
             return ResponseEntity.ok(response);
 
         } catch (IllegalArgumentException e) {
-            // Feedback para dados inválidos enviados pelo Android (Ex: Email vazio)
             return buildErrorResponse(HttpStatus.BAD_REQUEST, e.getMessage());
 
         } catch (Exception e) {
-            // Feedback 502 (Bad Gateway) formatado lindamente para o Android ler e exibir no Toast/Snackbar
-            System.err.println("❌ ERRO [AuthController]: Falha na comunicação com o ThingsBoard - " + e.getMessage());
+            System.err.println("❌ ERRO [AuthController]: Falha na comunicação - " + e.getMessage());
             return buildErrorResponse(HttpStatus.BAD_GATEWAY, "Erro ao conectar com o servidor final: " + e.getMessage());
         }
     }
