@@ -63,10 +63,17 @@ public class AuthProxyController {
 
         // 6. DINÂMICO: Pega os dados exatos deste utilizador e destranca a senha!
         String dynamicTbUrl = user.getTbUrl();
+
+        if (dynamicTbUrl != null && (dynamicTbUrl.startsWith("https://10.") || dynamicTbUrl.startsWith("https://192."))) {
+            System.out.println("🔄 AVISO [AuthProxyController]: Interceptando URL de laboratório. Forçando HTTP para: " + dynamicTbUrl);
+            dynamicTbUrl = dynamicTbUrl.replace("https://", "http://");
+        }
+
         String dynamicTbUser = user.getTbUsername();
         String dynamicTbPass = CryptoUtil.decrypt(user.getTbPassword()); // Destranca a senha na hora!
 
         try {
+            // Como forçamos HTTP, um RestTemplate padrão funciona perfeitamente!
             RestTemplate restTemplate = new RestTemplate();
             Map<String, String> tbCredentials = new HashMap<>();
             tbCredentials.put("username", dynamicTbUser);
@@ -78,6 +85,7 @@ public class AuthProxyController {
                     tbCredentials,
                     Map.class
             );
+
             // Verifica se o corpo é nulo antes de enviar para o Android
             if (tbResponse.getBody() == null || !tbResponse.getBody().containsKey("token")) {
                 return ResponseEntity.status(502).body(Map.of("error", "O ThingsBoard não retornou um token válido."));
@@ -91,7 +99,9 @@ public class AuthProxyController {
             return ResponseEntity.ok(responseBody);
 
         } catch (Exception e) {
-            return ResponseEntity.status(502).body(Map.of("error", "Erro ao comunicar com o servidor ThingsBoard em: " + dynamicTbUrl));
+            // Agora o Spring Boot vai gritar no log o motivo exato do erro!
+            System.err.println("❌ ERRO [AuthProxyController]: Falha ao conectar no ThingsBoard: " + e.getMessage());
+            return ResponseEntity.status(502).body(Map.of("error", "Erro ao conectar com o ThingsBoard: " + e.getMessage()));
         }
     }
 }
