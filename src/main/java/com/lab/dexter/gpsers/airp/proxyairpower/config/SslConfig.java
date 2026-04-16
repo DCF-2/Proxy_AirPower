@@ -2,53 +2,39 @@ package com.lab.dexter.gpsers.airp.proxyairpower.config;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.web.client.RestTemplate;
 
+import javax.net.ssl.HttpsURLConnection;
 import javax.net.ssl.SSLContext;
+import javax.net.ssl.TrustManager;
+import javax.net.ssl.X509TrustManager;
 import java.security.cert.X509Certificate;
-
-import org.apache.hc.client5.http.classic.HttpClient;
-import org.apache.hc.client5.http.impl.classic.HttpClients;
-import org.apache.hc.client5.http.impl.io.PoolingHttpClientConnectionManagerBuilder;
-import org.apache.hc.client5.http.io.HttpClientConnectionManager;
-import org.apache.hc.client5.http.ssl.SSLConnectionSocketFactory;
-import org.apache.hc.client5.http.ssl.NoopHostnameVerifier;
-import org.apache.hc.core5.ssl.SSLContextBuilder;
-import org.apache.hc.core5.ssl.TrustStrategy;
-
-import org.springframework.http.client.HttpComponentsClientHttpRequestFactory;
 
 @Configuration
 public class SslConfig {
 
     @Bean
-    public RestTemplate restTemplate() throws Exception {
+    public Boolean disableSSLValidation() throws Exception {
+        System.out.println("AVISO CRÍTICO: Validação de Certificado SSL Desabilitada Globalmente (Modo Laboratório).");
 
-        System.out.println("AVISO: Iniciando RestTemplate em MODO INSEGURO (Bypass SSL Ativo).");
+        TrustManager[] trustAllCerts = new TrustManager[]{
+                new X509TrustManager() {
+                    public X509Certificate[] getAcceptedIssuers() {
+                        return null;
+                    }
+                    public void checkClientTrusted(X509Certificate[] certs, String authType) {
+                    }
+                    public void checkServerTrusted(X509Certificate[] certs, String authType) {
+                    }
+                }
+        };
 
-        // Estratégia de confiança que aceita TUDO (Bypass)
-        TrustStrategy acceptingTrustStrategy = (X509Certificate[] chain, String authType) -> true;
+        SSLContext sc = SSLContext.getInstance("SSL");
+        sc.init(null, trustAllCerts, new java.security.SecureRandom());
+        HttpsURLConnection.setDefaultSSLSocketFactory(sc.getSocketFactory());
 
-        SSLContext sslContext = SSLContextBuilder.create()
-                .loadTrustMaterial(null, acceptingTrustStrategy)
-                .build();
+        // Aceita qualquer nome de host (Hostname Verifier bypass)
+        HttpsURLConnection.setDefaultHostnameVerifier((hostname, session) -> true);
 
-        // Desabilita a verificação de Hostname (Nome do domínio no certificado)
-        SSLConnectionSocketFactory sslSocketFactory = new SSLConnectionSocketFactory(
-                sslContext,
-                NoopHostnameVerifier.INSTANCE
-        );
-
-        HttpClientConnectionManager connectionManager = PoolingHttpClientConnectionManagerBuilder.create()
-                .setSSLSocketFactory(sslSocketFactory)
-                .build();
-
-        HttpClient httpClient = HttpClients.custom()
-                .setConnectionManager(connectionManager)
-                .build();
-
-        HttpComponentsClientHttpRequestFactory factory = new HttpComponentsClientHttpRequestFactory(httpClient);
-
-        return new RestTemplate(factory);
+        return true;
     }
 }
