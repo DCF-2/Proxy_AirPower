@@ -99,32 +99,38 @@ public class AuthProxyController {
         }
 
         // 6. Prepara conexão com ThingsBoard
-        String dynamicTbUrl = user.getTbUrl(); // Aqui VAI usar HTTPS
+        String dynamicTbUrl = user.getTbUrl();
         String dynamicTbUser = user.getTbUsername();
-        String dynamicTbPass = CryptoUtil.decrypt(user.getTbPassword());
+        String dynamicTbPass = null;
 
         try {
-            // INVOCAMOS O NOSSO REST TEMPLATE BLINDADO AQUI!
+            dynamicTbPass = CryptoUtil.decrypt(user.getTbPassword());
+        } catch (Exception e) {
+            System.err.println("⚠️ AVISO: Falha ao descriptografar a senha. Usando valor puro do banco.");
+            dynamicTbPass = user.getTbPassword(); // Se falhar a descriptografia, assume que tá em texto puro
+        }
+
+        // 🕵️ LOG DETETIVE: Imprime exatamente o que vamos mandar (Os colchetes mostram se tem espaços invisíveis)
+        System.out.println("🕵️ DETETIVE -> User TB: [" + dynamicTbUser + "]");
+        System.out.println("🕵️ DETETIVE -> Pass TB: [" + dynamicTbPass + "]");
+
+        try {
             RestTemplate restTemplate = createBlindRestTemplate();
 
-            // 1. FORÇA OS HEADERS DE JSON (Isso evita que o TB rejeite o corpo)
             org.springframework.http.HttpHeaders headers = new org.springframework.http.HttpHeaders();
             headers.setContentType(org.springframework.http.MediaType.APPLICATION_JSON);
             headers.setAccept(java.util.Collections.singletonList(org.springframework.http.MediaType.APPLICATION_JSON));
 
-            // 2. MONTA AS CREDENCIAIS
-            Map<String, String> tbCredentials = new HashMap<>();
-            tbCredentials.put("username", dynamicTbUser);
-            tbCredentials.put("password", dynamicTbPass);
+            // 🛡️ BLINDAGEM MÁXIMA DO JSON: Forçamos a String na mão para o Spring não formatar errado
+            String jsonBody = "{\"username\":\"" + dynamicTbUser + "\", \"password\":\"" + dynamicTbPass + "\"}";
+            System.out.println("🕵️ DETETIVE -> Payload JSON: " + jsonBody);
 
-            org.springframework.http.HttpEntity<Map<String, String>> requestEntity = new org.springframework.http.HttpEntity<>(tbCredentials, headers);
+            org.springframework.http.HttpEntity<String> requestEntity = new org.springframework.http.HttpEntity<>(jsonBody, headers);
 
-            System.out.println("🚀 [AuthProxyController] Mandando pro TB -> URL: " + dynamicTbUrl + " | User: " + dynamicTbUser);
-
-            // 3. Bate no servidor (HTTPS) ignorando a data de validade do certificado!
+            // Bate no servidor (HTTPS) ignorando a data de validade do certificado!
             ResponseEntity<Map> tbResponse = restTemplate.postForEntity(
                     dynamicTbUrl + "/api/auth/login",
-                    requestEntity, // Usa a entidade com os Headers forçados!
+                    requestEntity, // Usa o nosso JSON cravado na mão
                     Map.class
             );
 
@@ -138,16 +144,13 @@ public class AuthProxyController {
             return ResponseEntity.ok(responseBody);
 
         } catch (org.springframework.web.client.HttpStatusCodeException e) {
-            // O ThingsBoard respondeu, mas foi um erro (ex: 401 Senha Errada)
             System.err.println("⚠️ [AuthProxyController]: ThingsBoard recusou o login. Status: " + e.getStatusCode());
-
             if (e.getStatusCode().value() == 401) {
                 return ResponseEntity.status(401).body(Map.of("error", "As credenciais do ThingsBoard salvas no banco estão incorretas. Atualize a senha do Tenant."));
             }
             return ResponseEntity.status(502).body(Map.of("error", "O ThingsBoard retornou erro: " + e.getStatusCode()));
 
         } catch (Exception e) {
-            // Erro de rede (cabo desconectado, servidor desligado, etc)
             System.err.println("❌ ERRO [AuthProxyController]: Falha na rede ao conectar no ThingsBoard: " + e.getMessage());
             return ResponseEntity.status(502).body(Map.of("error", "O servidor ThingsBoard (10.5.0.66) está offline ou inacessível."));
         }
