@@ -21,6 +21,37 @@ public class DeviceProxyController {
     // MÉTODOS AUXILIARES
     // ==========================================
 
+    // 0. O CLONE DO BYPASS SSL (A CURA DO CERTIFICADO)
+    private RestTemplate createBlindRestTemplate() {
+        try {
+            javax.net.ssl.TrustManager[] trustAllCerts = new javax.net.ssl.TrustManager[]{
+                    new javax.net.ssl.X509TrustManager() {
+                        public java.security.cert.X509Certificate[] getAcceptedIssuers() { return null; }
+                        public void checkClientTrusted(java.security.cert.X509Certificate[] certs, String authType) { }
+                        public void checkServerTrusted(java.security.cert.X509Certificate[] certs, String authType) { }
+                    }
+            };
+
+            javax.net.ssl.SSLContext sslContext = javax.net.ssl.SSLContext.getInstance("TLS");
+            sslContext.init(null, trustAllCerts, new java.security.SecureRandom());
+
+            org.springframework.http.client.SimpleClientHttpRequestFactory factory = new org.springframework.http.client.SimpleClientHttpRequestFactory() {
+                @Override
+                protected void prepareConnection(java.net.HttpURLConnection connection, String httpMethod) throws java.io.IOException {
+                    if (connection instanceof javax.net.ssl.HttpsURLConnection) {
+                        ((javax.net.ssl.HttpsURLConnection) connection).setHostnameVerifier((hostname, session) -> true);
+                        ((javax.net.ssl.HttpsURLConnection) connection).setSSLSocketFactory(sslContext.getSocketFactory());
+                    }
+                    super.prepareConnection(connection, httpMethod);
+                }
+            };
+            return new RestTemplate(factory);
+        } catch (Exception e) {
+            e.printStackTrace();
+            return new RestTemplate();
+        }
+    }
+
     // 1. Prepara a "mala" com o Token do Android para enviar ao ThingsBoard
     private HttpHeaders createHeaders(String token) {
         HttpHeaders headers = new HttpHeaders();
@@ -53,7 +84,7 @@ public class DeviceProxyController {
 
         try {
             String tbUrl = getDynamicTbUrl(email);
-            RestTemplate restTemplate = new RestTemplate();
+            RestTemplate restTemplate = createBlindRestTemplate();
             HttpEntity<String> entity = new HttpEntity<>(createHeaders(token));
 
             String targetUrl = tbUrl + "/api/tenant/devices?pageSize=" + pageSize + "&page=" + page;
@@ -75,7 +106,7 @@ public class DeviceProxyController {
 
         try {
             String tbUrl = getDynamicTbUrl(email);
-            RestTemplate restTemplate = new RestTemplate();
+            RestTemplate restTemplate = createBlindRestTemplate();
             HttpEntity<String> entity = new HttpEntity<>(devicePayload, createHeaders(token));
 
             String targetUrl = tbUrl + "/api/device";
@@ -97,7 +128,7 @@ public class DeviceProxyController {
 
         try {
             String tbUrl = getDynamicTbUrl(email);
-            RestTemplate restTemplate = new RestTemplate();
+            RestTemplate restTemplate = createBlindRestTemplate();
             HttpEntity<String> entity = new HttpEntity<>(createHeaders(token));
 
             String targetUrl = tbUrl + "/api/device/" + deviceId + "/credentials";
@@ -120,7 +151,7 @@ public class DeviceProxyController {
 
         try {
             String tbUrl = getDynamicTbUrl(email);
-            RestTemplate restTemplate = new RestTemplate();
+            RestTemplate restTemplate = createBlindRestTemplate();
             HttpEntity<String> entity = new HttpEntity<>(locationPayload, createHeaders(token));
 
             String targetUrl = tbUrl + "/api/plugins/telemetry/DEVICE/" + deviceId + "/timeseries/ANY";
@@ -143,7 +174,7 @@ public class DeviceProxyController {
 
         try {
             String tbUrl = getDynamicTbUrl(email);
-            RestTemplate restTemplate = new RestTemplate();
+            RestTemplate restTemplate = createBlindRestTemplate();
             HttpEntity<String> entity = new HttpEntity<>(createHeaders(token));
 
             String targetUrl;
@@ -188,7 +219,7 @@ public class DeviceProxyController {
 
         try {
             String tbUrl = getDynamicTbUrl(email);
-            RestTemplate restTemplate = new RestTemplate();
+            RestTemplate restTemplate = createBlindRestTemplate();
 
             HttpEntity<String> entity = new HttpEntity<>(createHeaders(token));
 
@@ -212,7 +243,7 @@ public class DeviceProxyController {
 
         try {
             String tbUrl = getDynamicTbUrl(email);
-            RestTemplate restTemplate = new RestTemplate();
+            RestTemplate restTemplate = createBlindRestTemplate();
 
             HttpHeaders headers = createHeaders(token);
             headers.setContentType(MediaType.APPLICATION_JSON);
@@ -237,7 +268,7 @@ public class DeviceProxyController {
 
         try {
             String tbUrl = getDynamicTbUrl(email);
-            RestTemplate restTemplate = new RestTemplate();
+            RestTemplate restTemplate = createBlindRestTemplate();
             HttpEntity<String> entity = new HttpEntity<>(createHeaders(token));
 
             // A MÁGICA ESTÁ AQUI: Usar 'deviceInfos' em vez de 'devices'
