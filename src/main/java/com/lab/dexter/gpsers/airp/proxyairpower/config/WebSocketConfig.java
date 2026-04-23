@@ -17,8 +17,7 @@ public class WebSocketConfig implements WebSocketConfigurer {
 
     @Override
     public void registerWebSocketHandlers(WebSocketHandlerRegistry registry) {
-        // Expõe o endpoint para o Android conectar (permitindo origens cruzadas)
         registry.addHandler(telemetryBridgeHandler, "/ws/telemetry")
-                .setAllowedOrigins("*");
+                .setAllowedOriginPatterns("*"); // O setAllowedOrigins("*") em versões Spring mais novas pode não funcionar bem, setAllowedOriginPatterns é o correto!
     }
 }
