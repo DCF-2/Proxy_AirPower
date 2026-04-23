@@ -6,12 +6,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
-import org.springframework.web.socket.CloseStatus;
-import org.springframework.web.socket.TextMessage;
-import org.springframework.web.socket.WebSocketHandler;
-import org.springframework.web.socket.WebSocketHttpHeaders;
-import org.springframework.web.socket.WebSocketSession;
-import org.springframework.web.socket.client.WebSocketClient;
+import org.springframework.web.socket.*;
 import org.springframework.web.socket.client.standard.StandardWebSocketClient;
 import org.springframework.web.socket.handler.TextWebSocketHandler;
 
@@ -23,7 +18,6 @@ import java.security.cert.X509Certificate;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ExecutionException;
 
 @Component
 public class TelemetryBridgeHandler extends TextWebSocketHandler {
@@ -34,26 +28,24 @@ public class TelemetryBridgeHandler extends TextWebSocketHandler {
 
     private final ConcurrentHashMap<String, WebSocketSession> tbSessions = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, WebSocketSession> androidSessions = new ConcurrentHashMap<>();
-
-    // Declaramos apenas a interface WebSocketClient
-    private final WebSocketClient wsClient;
+    private final StandardWebSocketClient wsClient;
 
     @Autowired
     public TelemetryBridgeHandler(AppUserRepository userRepository) {
         this.userRepository = userRepository;
-
-        StandardWebSocketClient standardClient = new StandardWebSocketClient();
-        standardClient.getUserProperties().put("org.apache.tomcat.websocket.SSL_CONTEXT", createBlindSslContext());
-        this.wsClient = standardClient;
+        this.wsClient = new StandardWebSocketClient();
+        this.wsClient.getUserProperties().put("org.apache.tomcat.websocket.SSL_CONTEXT", createBlindSslContext());
     }
 
     @Override
     public void afterConnectionEstablished(WebSocketSession androidSession) throws Exception {
         logger.info("📱 Android conectado ao Proxy via WebSocket. ID: {}", androidSession.getId());
 
-        String token = extractHeader(androidSession, "Authorization");
+        // LÊ OS HEADERS IMEDIATAMENTE PARA NÃO SEREM RECICLADOS PELO TOMCAT
+        String rawToken = extractHeader(androidSession, "Authorization");
         String email = extractHeader(androidSession, "X-User-Email");
 
+        String token = rawToken;
         if (token != null && token.startsWith("Bearer ")) {
             token = token.substring(7);
         }
@@ -73,6 +65,7 @@ public class TelemetryBridgeHandler extends TextWebSocketHandler {
 
         String tbBaseUrl = userOpt.get().getTbUrl();
         String wsBaseUrl = tbBaseUrl.replace("https://", "wss://").replace("http://", "ws://");
+        // O token vai via Query String para não brigarmos com o handshake interno do ThingsBoard
         String dynamicTbWsUrl = wsBaseUrl + "/api/ws/plugins/telemetry?token=" + token;
 
         logger.info("🔗 A rotear telemetria para: {}", wsBaseUrl);
@@ -105,13 +98,16 @@ public class TelemetryBridgeHandler extends TextWebSocketHandler {
         };
 
         try {
-            // Remova o .get() no final desta linha!
-            // Queremos que a ponte seja construída em background, sem bloquear a ligação original.
-            wsClient.execute(tbHandler, new WebSocketHttpHeaders(), URI.create(dynamicTbWsUrl));
-
+            // A solução mágica: Executar num Thread separado e deixar o AndroidSession em paz
+            new Thread(() -> {
+                try {
+                    wsClient.execute(tbHandler, new WebSocketHttpHeaders(), URI.create(dynamicTbWsUrl)).get();
+                } catch (Exception e) {
+                    logger.error("❌ Falha na thread de ligação: {}", e.getMessage());
+                }
+            }).start();
         } catch (Exception e) {
-            logger.error("❌ Falha ao tentar conectar o Proxy ao ThingsBoard: {}", e.getMessage());
-            androidSession.close(CloseStatus.SERVER_ERROR.withReason("Falha no Upstream TB"));
+            logger.error("❌ Erro ao instanciar thread: {}", e.getMessage());
         }
     }
 
@@ -121,7 +117,7 @@ public class TelemetryBridgeHandler extends TextWebSocketHandler {
         if (tbSession != null && tbSession.isOpen()) {
             tbSession.sendMessage(message);
         } else {
-            logger.warn("Tentativa de envio do Android sem ponte ativa no ThingsBoard.");
+            logger.warn("Tentativa de envio do Android sem ponte ativa. Ignorando.");
         }
     }
 
@@ -136,6 +132,7 @@ public class TelemetryBridgeHandler extends TextWebSocketHandler {
     }
 
     private String extractHeader(WebSocketSession session, String headerName) {
+        // Tenta ler dos HandshakeHeaders (onde o Tomcat coloca o Upgrade Request originalmente)
         List<String> headers = session.getHandshakeHeaders().get(headerName);
         return (headers != null && !headers.isEmpty()) ? headers.get(0) : null;
     }
