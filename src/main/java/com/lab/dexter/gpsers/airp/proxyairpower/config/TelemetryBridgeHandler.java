@@ -33,8 +33,19 @@ public class TelemetryBridgeHandler extends TextWebSocketHandler {
     @Autowired
     public TelemetryBridgeHandler(AppUserRepository userRepository) {
         this.userRepository = userRepository;
+
         this.wsClient = new StandardWebSocketClient();
-        this.wsClient.getUserProperties().put("org.apache.tomcat.websocket.SSL_CONTEXT", createBlindSslContext());
+
+        // No Spring Boot moderno/Jakarta, o Tomcat procura o SSL_CONTEXT nestas propriedades.
+        // Usamos a string direta para evitar problemas de import de bibliotecas internas.
+        SSLContext sslContext = createBlindSslContext();
+
+        // 1. Define para o cliente padrão do Spring
+        this.wsClient.getUserProperties().put("org.apache.tomcat.websocket.SSL_CONTEXT", sslContext);
+
+        // 2. Garante que o motor subjacente (seja Tomcat ou Tyrus) receba a configuração
+        // Algumas versões do Jakarta exigem esta chave específica:
+        this.wsClient.getUserProperties().put("jakarta.websocket.ssl.context", sslContext);
     }
 
     @Override
