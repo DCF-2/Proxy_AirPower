@@ -41,9 +41,8 @@ public class TelemetryBridgeHandler extends TextWebSocketHandler {
     public void afterConnectionEstablished(WebSocketSession androidSession) throws Exception {
         logger.info("📱 Android conectado ao Proxy via WebSocket. ID: {}", androidSession.getId());
 
-        // LÊ OS HEADERS IMEDIATAMENTE PARA NÃO SEREM RECICLADOS PELO TOMCAT
-        String rawToken = extractHeader(androidSession, "Authorization");
-        String email = extractHeader(androidSession, "X-User-Email");
+        String rawToken = (String) androidSession.getAttributes().get("Auth-Token");
+        String email = (String) androidSession.getAttributes().get("User-Email");
 
         String token = rawToken;
         if (token != null && token.startsWith("Bearer ")) {

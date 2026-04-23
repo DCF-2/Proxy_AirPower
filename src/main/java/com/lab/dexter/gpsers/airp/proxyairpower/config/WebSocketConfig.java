@@ -18,6 +18,7 @@ public class WebSocketConfig implements WebSocketConfigurer {
     @Override
     public void registerWebSocketHandlers(WebSocketHandlerRegistry registry) {
         registry.addHandler(telemetryBridgeHandler, "/ws/telemetry")
-                .setAllowedOriginPatterns("*"); // O setAllowedOrigins("*") em versões Spring mais novas pode não funcionar bem, setAllowedOriginPatterns é o correto!
+                .setAllowedOriginPatterns("*")
+                .addInterceptors(new TokenHandshakeInterceptor());
     }
 }
