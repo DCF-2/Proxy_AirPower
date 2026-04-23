@@ -105,11 +105,11 @@ public class TelemetryBridgeHandler extends TextWebSocketHandler {
         };
 
         try {
-            // A interface genérica WebSocketClient devolve uma Future (CompletableFuture ou ListenableFuture dependendo da versão)
-            // Chamar .get() forçará a espera da conexão (ou lançará erro se falhar), resolvendo a assinatura do metodo.
-            wsClient.execute(tbHandler, new WebSocketHttpHeaders(), URI.create(dynamicTbWsUrl)).get();
+            // Remova o .get() no final desta linha!
+            // Queremos que a ponte seja construída em background, sem bloquear a ligação original.
+            wsClient.execute(tbHandler, new WebSocketHttpHeaders(), URI.create(dynamicTbWsUrl));
 
-        } catch (InterruptedException | ExecutionException e) {
+        } catch (Exception e) {
             logger.error("❌ Falha ao tentar conectar o Proxy ao ThingsBoard: {}", e.getMessage());
             androidSession.close(CloseStatus.SERVER_ERROR.withReason("Falha no Upstream TB"));
         }
