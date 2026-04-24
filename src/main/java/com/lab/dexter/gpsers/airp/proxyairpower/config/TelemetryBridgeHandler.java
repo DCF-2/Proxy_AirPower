@@ -77,14 +77,16 @@ public class TelemetryBridgeHandler extends TextWebSocketHandler {
         String wsBaseUrl = tbBaseUrl.replace("https://", "wss://").replace("http://", "ws://");
 
         // 🚨 PROTEÇÃO CONTRA PROTOCOLO INVÁLIDO 🚨
-        // A porta 8080 (padrão do ThingsBoard) não usa SSL.
-        // Se a URL foi guardada erradamente como https (wss), forçamos o downgrade para ws://
         if (wsBaseUrl.contains(":8080") && wsBaseUrl.startsWith("wss://")) {
             logger.warn("⚠️ A corrigir protocolo WSS para WS na porta 8080...");
             wsBaseUrl = wsBaseUrl.replace("wss://", "ws://");
         }
 
-        // O token vai via Query String
+        // Remover qualquer barra / no final da baseUrl para evitar erro 400 (ex: "http://ip:8080//api/ws...")
+        if (wsBaseUrl.endsWith("/")) {
+            wsBaseUrl = wsBaseUrl.substring(0, wsBaseUrl.length() - 1);
+        }
+
         String dynamicTbWsUrl = wsBaseUrl + "/api/ws/plugins/telemetry?token=" + token;
 
         logger.info("🔗 A rotear telemetria para: {}", wsBaseUrl);
@@ -119,7 +121,10 @@ public class TelemetryBridgeHandler extends TextWebSocketHandler {
             // A solução mágica: Executar num Thread separado e deixar o AndroidSession em paz
             new Thread(() -> {
                 try {
-                    wsClient.execute(tbHandler, new WebSocketHttpHeaders(), URI.create(dynamicTbWsUrl)).get();
+                    WebSocketHttpHeaders headers = new WebSocketHttpHeaders();
+                    // Como não passámos os headers do Android diretamente, não há conflito de CORS.
+                    // Apenas fazemos a chamada com os headers em branco e o token na query params.
+                    wsClient.execute(tbHandler, headers, URI.create(dynamicTbWsUrl)).get();
                 } catch (Exception e) {
                     logger.error("❌ Falha na thread de ligação: {}", e.getMessage());
                 }
@@ -169,6 +174,6 @@ public class TelemetryBridgeHandler extends TextWebSocketHandler {
             return sc;
         } catch (Exception e) {
             throw new RuntimeException("Falha ao criar Blind SSL Context", e);
+            }
         }
     }
-}
