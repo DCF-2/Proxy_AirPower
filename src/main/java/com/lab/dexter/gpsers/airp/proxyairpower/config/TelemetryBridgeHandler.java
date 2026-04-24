@@ -81,12 +81,20 @@ public class TelemetryBridgeHandler extends TextWebSocketHandler {
             wsBaseUrl = wsBaseUrl.substring(0, wsBaseUrl.length() - 1);
         }
 
+        // 🚨 LIMPEZA AGRESSIVA DO TOKEN (Garante que não há quebras de linha ocultas)
+        token = token.replaceAll("[\\n\\r]", "");
+
+        // DECLARAÇÃO DO ORIGIN QUE FALTAVA PARA O COMPILADOR:
+        String originUrl = wsBaseUrl.replace("ws://", "http://").replace("wss://", "https://");
+
         String dynamicTbWsUrl = wsBaseUrl + "/api/ws/plugins/telemetry?token=" + token;
         logger.info("🔗 A rotear telemetria para o ThingsBoard (com OkHttp): {}", wsBaseUrl);
 
         // Criamos o request de ligação ao ThingsBoard
         Request request = new Request.Builder()
                 .url(dynamicTbWsUrl)
+                .addHeader("Origin", originUrl) // Previne falhas de CORS no Tomcat/Spring do TB
+                .addHeader("Authorization", "Bearer " + token) // Algumas instâncias CE exigem nos Headers também!
                 .build();
 
         // Iniciamos a ponte usando o OkHttp
