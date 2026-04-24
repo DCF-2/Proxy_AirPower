@@ -3,7 +3,6 @@ package com.lab.dexter.gpsers.airp.proxyairpower.config;
 import com.lab.dexter.gpsers.airp.proxyairpower.entities.AppUser;
 import com.lab.dexter.gpsers.airp.proxyairpower.repositories.AppUserRepository;
 import okhttp3.*;
-import okio.ByteString;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -21,18 +20,15 @@ import java.security.SecureRandom;
 import java.security.cert.X509Certificate;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 
 @Component
 public class TelemetryBridgeHandler extends TextWebSocketHandler {
 
     private static final Logger logger = LoggerFactory.getLogger(TelemetryBridgeHandler.class);
-
     private final AppUserRepository userRepository;
-
-    // Guarda a ligação Android (Id da Sessão) <-> O Socket do OkHttp ligado ao TB
     private final ConcurrentHashMap<String, WebSocket> tbSockets = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<WebSocket, WebSocketSession> androidSessions = new ConcurrentHashMap<>();
-
     private final OkHttpClient okHttpClient;
 
     @Autowired
@@ -53,18 +49,17 @@ public class TelemetryBridgeHandler extends TextWebSocketHandler {
             token = token.substring(7);
         }
         if (token != null) {
-            token = token.replace("\"", "").trim();
+            // Limpa o token de aspas, espaços e quebras de linha escondidas
+            token = token.replaceAll("[\\n\\r\\\" ]", "");
         }
 
         if (token == null || email == null) {
-            logger.warn("❌ Conexão recusada: Token ou Email ausente no handshake.");
             androidSession.close(CloseStatus.NOT_ACCEPTABLE.withReason("Faltam Headers"));
             return;
         }
 
         Optional<AppUser> userOpt = userRepository.findByEmail(email);
         if (userOpt.isEmpty() || userOpt.get().getTbUrl() == null) {
-            logger.warn("❌ Conexão recusada: Utilizador inválido ou sem URL TB.");
             androidSession.close(CloseStatus.SERVER_ERROR.withReason("TB URL não configurada"));
             return;
         }
@@ -72,32 +67,23 @@ public class TelemetryBridgeHandler extends TextWebSocketHandler {
         String tbBaseUrl = userOpt.get().getTbUrl();
         String wsBaseUrl = tbBaseUrl.replace("https://", "wss://").replace("http://", "ws://");
 
-        if (wsBaseUrl.contains(":8080") && wsBaseUrl.startsWith("wss://")) {
-            logger.warn("⚠️ A corrigir protocolo WSS para WS na porta 8080...");
-            wsBaseUrl = wsBaseUrl.replace("wss://", "ws://");
-        }
+        // 🚨 REMOVIDO O HACK DO DOWNGRADE 🚨
+        // Descobrimos que o servidor ThingsBoard usa mesmo SSL na porta 8080!
+        // Ao enviarmos ws:// (texto limpo) para uma porta WSS, recebíamos o HTTP 400 Bad Request!
 
         if (wsBaseUrl.endsWith("/")) {
             wsBaseUrl = wsBaseUrl.substring(0, wsBaseUrl.length() - 1);
         }
 
-        // 🚨 LIMPEZA AGRESSIVA DO TOKEN (Garante que não há quebras de linha ocultas)
-        token = token.replaceAll("[\\n\\r]", "");
-
-        // DECLARAÇÃO DO ORIGIN QUE FALTAVA PARA O COMPILADOR:
-        String originUrl = wsBaseUrl.replace("ws://", "http://").replace("wss://", "https://");
-
+        // Endpoint original e limpo
         String dynamicTbWsUrl = wsBaseUrl + "/api/ws/plugins/telemetry?token=" + token;
         logger.info("🔗 A rotear telemetria para o ThingsBoard (com OkHttp): {}", wsBaseUrl);
 
-        // Criamos o request de ligação ao ThingsBoard
+        // Deixamos o OkHttp gerir os cabeçalhos nativamente
         Request request = new Request.Builder()
                 .url(dynamicTbWsUrl)
-                .addHeader("Origin", originUrl) // Previne falhas de CORS no Tomcat/Spring do TB
-                .addHeader("Authorization", "Bearer " + token) // Algumas instâncias CE exigem nos Headers também!
                 .build();
 
-        // Iniciamos a ponte usando o OkHttp
         okHttpClient.newWebSocket(request, new WebSocketListener() {
             @Override
             public void onOpen(WebSocket webSocket, Response response) {
@@ -119,19 +105,7 @@ public class TelemetryBridgeHandler extends TextWebSocketHandler {
             }
 
             @Override
-            public void onMessage(WebSocket webSocket, ByteString bytes) {
-                // Ignoramos binário no ThingsBoard
-            }
-
-            @Override
-            public void onClosing(WebSocket webSocket, int code, String reason) {
-                webSocket.close(1000, null);
-                logger.info("🔌 Conexão OkHttp ThingsBoard a fechar: {}", reason);
-            }
-
-            @Override
             public void onClosed(WebSocket webSocket, int code, String reason) {
-                logger.info("🔌 Conexão OkHttp ThingsBoard fechada: {}", reason);
                 cleanupSockets(webSocket);
             }
 
@@ -161,14 +135,11 @@ public class TelemetryBridgeHandler extends TextWebSocketHandler {
         WebSocket tbSocket = tbSockets.get(androidSession.getId());
         if (tbSocket != null) {
             tbSocket.send(message.getPayload());
-        } else {
-            logger.warn("Tentativa de envio do Android sem ponte ativa no TB. Ignorando.");
         }
     }
 
     @Override
     public void afterConnectionClosed(WebSocketSession androidSession, CloseStatus status) throws Exception {
-        logger.info("📱 Android desconectado do Proxy: {}", status);
         WebSocket tbSocket = tbSockets.remove(androidSession.getId());
         if (tbSocket != null) {
             androidSessions.remove(tbSocket);
@@ -185,11 +156,12 @@ public class TelemetryBridgeHandler extends TextWebSocketHandler {
                         public X509Certificate[] getAcceptedIssuers() { return new X509Certificate[]{}; }
                     }
             };
-            SSLContext sslContext = SSLContext.getInstance("SSL");
+            SSLContext sslContext = SSLContext.getInstance("TLS");
             sslContext.init(null, trustAllCerts, new SecureRandom());
             return new OkHttpClient.Builder()
                     .sslSocketFactory(sslContext.getSocketFactory(), (X509TrustManager) trustAllCerts[0])
                     .hostnameVerifier((hostname, session) -> true)
+                    .pingInterval(20, TimeUnit.SECONDS)
                     .build();
         } catch (Exception e) {
             throw new RuntimeException(e);
