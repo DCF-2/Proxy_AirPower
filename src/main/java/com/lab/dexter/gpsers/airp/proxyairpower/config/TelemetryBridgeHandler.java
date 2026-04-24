@@ -75,11 +75,19 @@ public class TelemetryBridgeHandler extends TextWebSocketHandler {
 
         String tbBaseUrl = userOpt.get().getTbUrl();
         String wsBaseUrl = tbBaseUrl.replace("https://", "wss://").replace("http://", "ws://");
-        // O token vai via Query String para não brigarmos com o handshake interno do ThingsBoard
+
+        // 🚨 PROTEÇÃO CONTRA PROTOCOLO INVÁLIDO 🚨
+        // A porta 8080 (padrão do ThingsBoard) não usa SSL.
+        // Se a URL foi guardada erradamente como https (wss), forçamos o downgrade para ws://
+        if (wsBaseUrl.contains(":8080") && wsBaseUrl.startsWith("wss://")) {
+            logger.warn("⚠️ A corrigir protocolo WSS para WS na porta 8080...");
+            wsBaseUrl = wsBaseUrl.replace("wss://", "ws://");
+        }
+
+        // O token vai via Query String
         String dynamicTbWsUrl = wsBaseUrl + "/api/ws/plugins/telemetry?token=" + token;
 
         logger.info("🔗 A rotear telemetria para: {}", wsBaseUrl);
-
         WebSocketHandler tbHandler = new TextWebSocketHandler() {
             @Override
             public void afterConnectionEstablished(WebSocketSession tbSession) {
