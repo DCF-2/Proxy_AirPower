@@ -3,6 +3,7 @@ package com.lab.dexter.gpsers.airp.proxyairpower;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
+import javax.net.ssl.HttpsURLConnection;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.X509TrustManager;
@@ -12,10 +13,11 @@ import java.security.cert.X509Certificate;
 public class ProxyairpowerApplication {
 
 	public static void main(String[] args) {
-		javax.net.ssl.HttpsURLConnection.setDefaultSSLSocketFactory(createBlindSslContext().getSocketFactory());
+		disableSSLCertificateChecking();
 		SpringApplication.run(ProxyairpowerApplication.class, args);
 	}
-	private static SSLContext createBlindSslContext() {
+
+	private static void disableSSLCertificateChecking() {
 		try {
 			TrustManager[] trustAllCerts = new TrustManager[]{
 					new X509TrustManager() {
@@ -24,12 +26,19 @@ public class ProxyairpowerApplication {
 						public void checkServerTrusted(X509Certificate[] certs, String authType) {}
 					}
 			};
+
 			SSLContext sc = SSLContext.getInstance("TLS");
 			sc.init(null, trustAllCerts, new java.security.SecureRandom());
-			return sc;
+
+			// Isto aplica a regra para todas as conexões HttpsURLConnection da JVM (incluindo o StandardWebSocketClient)
+			HttpsURLConnection.setDefaultSSLSocketFactory(sc.getSocketFactory());
+
+			// Opcional, mas recomendado para lab: desativa a verificação de Hostname também
+			HttpsURLConnection.setDefaultHostnameVerifier((hostname, session) -> true);
+
+			System.out.println("⚠️ AVISO: Verificação de Certificados SSL foi globalmente DESATIVADA (Ambiente de Laboratório).");
 		} catch (Exception e) {
-			throw new RuntimeException("Falha ao criar Blind SSL Context", e);
+			System.err.println("Erro ao tentar desativar verificação SSL: " + e.getMessage());
 		}
 	}
 }
-
