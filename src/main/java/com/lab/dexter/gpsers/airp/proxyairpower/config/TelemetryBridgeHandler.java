@@ -2,20 +2,23 @@ package com.lab.dexter.gpsers.airp.proxyairpower.config;
 
 import com.lab.dexter.gpsers.airp.proxyairpower.entities.AppUser;
 import com.lab.dexter.gpsers.airp.proxyairpower.repositories.AppUserRepository;
+import okhttp3.*;
+import okio.ByteString;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
-import org.springframework.web.socket.*;
-import org.springframework.web.socket.client.standard.StandardWebSocketClient;
+import org.springframework.web.socket.CloseStatus;
+import org.springframework.web.socket.TextMessage;
+import org.springframework.web.socket.WebSocketSession;
 import org.springframework.web.socket.handler.TextWebSocketHandler;
 
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.X509TrustManager;
-import java.net.URI;
+import java.io.IOException;
+import java.security.SecureRandom;
 import java.security.cert.X509Certificate;
-import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -26,26 +29,16 @@ public class TelemetryBridgeHandler extends TextWebSocketHandler {
 
     private final AppUserRepository userRepository;
 
-    private final ConcurrentHashMap<String, WebSocketSession> tbSessions = new ConcurrentHashMap<>();
-    private final ConcurrentHashMap<String, WebSocketSession> androidSessions = new ConcurrentHashMap<>();
-    private final StandardWebSocketClient wsClient;
+    // Guarda a ligação Android (Id da Sessão) <-> O Socket do OkHttp ligado ao TB
+    private final ConcurrentHashMap<String, WebSocket> tbSockets = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<WebSocket, WebSocketSession> androidSessions = new ConcurrentHashMap<>();
+
+    private final OkHttpClient okHttpClient;
 
     @Autowired
     public TelemetryBridgeHandler(AppUserRepository userRepository) {
         this.userRepository = userRepository;
-
-        this.wsClient = new StandardWebSocketClient();
-
-        // No Spring Boot moderno/Jakarta, o Tomcat procura o SSL_CONTEXT nestas propriedades.
-        // Usamos a string direta para evitar problemas de import de bibliotecas internas.
-        SSLContext sslContext = createBlindSslContext();
-
-        // 1. Define para o cliente padrão do Spring
-        this.wsClient.getUserProperties().put("org.apache.tomcat.websocket.SSL_CONTEXT", sslContext);
-
-        // 2. Garante que o motor subjacente (seja Tomcat ou Tyrus) receba a configuração
-        // Algumas versões do Jakarta exigem esta chave específica:
-        this.wsClient.getUserProperties().put("jakarta.websocket.ssl.context", sslContext);
+        this.okHttpClient = createBlindOkHttpClient();
     }
 
     @Override
@@ -58,6 +51,9 @@ public class TelemetryBridgeHandler extends TextWebSocketHandler {
         String token = rawToken;
         if (token != null && token.startsWith("Bearer ")) {
             token = token.substring(7);
+        }
+        if (token != null) {
+            token = token.replace("\"", "").trim();
         }
 
         if (token == null || email == null) {
@@ -76,104 +72,119 @@ public class TelemetryBridgeHandler extends TextWebSocketHandler {
         String tbBaseUrl = userOpt.get().getTbUrl();
         String wsBaseUrl = tbBaseUrl.replace("https://", "wss://").replace("http://", "ws://");
 
-        // 🚨 PROTEÇÃO CONTRA PROTOCOLO INVÁLIDO 🚨
         if (wsBaseUrl.contains(":8080") && wsBaseUrl.startsWith("wss://")) {
             logger.warn("⚠️ A corrigir protocolo WSS para WS na porta 8080...");
             wsBaseUrl = wsBaseUrl.replace("wss://", "ws://");
         }
 
-        // Remover qualquer barra / no final da baseUrl para evitar erro 400 (ex: "http://ip:8080//api/ws...")
         if (wsBaseUrl.endsWith("/")) {
             wsBaseUrl = wsBaseUrl.substring(0, wsBaseUrl.length() - 1);
         }
 
         String dynamicTbWsUrl = wsBaseUrl + "/api/ws/plugins/telemetry?token=" + token;
+        logger.info("🔗 A rotear telemetria para o ThingsBoard (com OkHttp): {}", wsBaseUrl);
 
-        logger.info("🔗 A rotear telemetria para: {}", wsBaseUrl);
-        WebSocketHandler tbHandler = new TextWebSocketHandler() {
+        // Criamos o request de ligação ao ThingsBoard
+        Request request = new Request.Builder()
+                .url(dynamicTbWsUrl)
+                .build();
+
+        // Iniciamos a ponte usando o OkHttp
+        okHttpClient.newWebSocket(request, new WebSocketListener() {
             @Override
-            public void afterConnectionEstablished(WebSocketSession tbSession) {
-                logger.info("⚡ Ponte ativada! Proxy conectado ao ThingsBoard. ID: {}", tbSession.getId());
-                tbSessions.put(androidSession.getId(), tbSession);
-                androidSessions.put(tbSession.getId(), androidSession);
+            public void onOpen(WebSocket webSocket, Response response) {
+                logger.info("⚡ Ponte ativada! Proxy OkHttp conectado ao ThingsBoard.");
+                tbSockets.put(androidSession.getId(), webSocket);
+                androidSessions.put(webSocket, androidSession);
             }
 
             @Override
-            protected void handleTextMessage(WebSocketSession tbSession, TextMessage message) throws Exception {
-                WebSocketSession aSession = androidSessions.get(tbSession.getId());
+            public void onMessage(WebSocket webSocket, String text) {
+                WebSocketSession aSession = androidSessions.get(webSocket);
                 if (aSession != null && aSession.isOpen()) {
-                    aSession.sendMessage(message);
+                    try {
+                        aSession.sendMessage(new TextMessage(text));
+                    } catch (IOException e) {
+                        logger.error("Erro a repassar msg para Android", e);
+                    }
                 }
             }
 
             @Override
-            public void afterConnectionClosed(WebSocketSession tbSession, CloseStatus status) throws Exception {
-                logger.info("🔌 Conexão ThingsBoard fechada: {}", status);
-                WebSocketSession aSession = androidSessions.remove(tbSession.getId());
-                if (aSession != null) {
-                    tbSessions.remove(aSession.getId());
-                    if (aSession.isOpen()) aSession.close(status);
-                }
+            public void onMessage(WebSocket webSocket, ByteString bytes) {
+                // Ignoramos binário no ThingsBoard
             }
-        };
 
-        try {
-            // A solução mágica: Executar num Thread separado e deixar o AndroidSession em paz
-            new Thread(() -> {
+            @Override
+            public void onClosing(WebSocket webSocket, int code, String reason) {
+                webSocket.close(1000, null);
+                logger.info("🔌 Conexão OkHttp ThingsBoard a fechar: {}", reason);
+            }
+
+            @Override
+            public void onClosed(WebSocket webSocket, int code, String reason) {
+                logger.info("🔌 Conexão OkHttp ThingsBoard fechada: {}", reason);
+                cleanupSockets(webSocket);
+            }
+
+            @Override
+            public void onFailure(WebSocket webSocket, Throwable t, Response response) {
+                logger.error("❌ Falha na ponte OkHttp para o ThingsBoard: {} (Code: {})",
+                        t.getMessage(), response != null ? response.code() : "null");
+                cleanupSockets(webSocket);
+            }
+        });
+    }
+
+    private void cleanupSockets(WebSocket webSocket) {
+        WebSocketSession aSession = androidSessions.remove(webSocket);
+        if (aSession != null) {
+            tbSockets.remove(aSession.getId());
+            if (aSession.isOpen()) {
                 try {
-                    WebSocketHttpHeaders headers = new WebSocketHttpHeaders();
-                    // Como não passámos os headers do Android diretamente, não há conflito de CORS.
-                    // Apenas fazemos a chamada com os headers em branco e o token na query params.
-                    wsClient.execute(tbHandler, headers, URI.create(dynamicTbWsUrl)).get();
-                } catch (Exception e) {
-                    logger.error("❌ Falha na thread de ligação: {}", e.getMessage());
-                }
-            }).start();
-        } catch (Exception e) {
-            logger.error("❌ Erro ao instanciar thread: {}", e.getMessage());
+                    aSession.close(CloseStatus.SERVER_ERROR);
+                } catch (IOException ignored) {}
+            }
         }
     }
 
     @Override
     protected void handleTextMessage(WebSocketSession androidSession, TextMessage message) throws Exception {
-        WebSocketSession tbSession = tbSessions.get(androidSession.getId());
-        if (tbSession != null && tbSession.isOpen()) {
-            tbSession.sendMessage(message);
+        WebSocket tbSocket = tbSockets.get(androidSession.getId());
+        if (tbSocket != null) {
+            tbSocket.send(message.getPayload());
         } else {
-            logger.warn("Tentativa de envio do Android sem ponte ativa. Ignorando.");
+            logger.warn("Tentativa de envio do Android sem ponte ativa no TB. Ignorando.");
         }
     }
 
     @Override
     public void afterConnectionClosed(WebSocketSession androidSession, CloseStatus status) throws Exception {
         logger.info("📱 Android desconectado do Proxy: {}", status);
-        WebSocketSession tbSession = tbSessions.remove(androidSession.getId());
-        if (tbSession != null) {
-            androidSessions.remove(tbSession.getId());
-            if (tbSession.isOpen()) tbSession.close(status);
+        WebSocket tbSocket = tbSockets.remove(androidSession.getId());
+        if (tbSocket != null) {
+            androidSessions.remove(tbSocket);
+            tbSocket.close(1000, "Android disconnected");
         }
     }
 
-    private String extractHeader(WebSocketSession session, String headerName) {
-        // Tenta ler dos HandshakeHeaders (onde o Tomcat coloca o Upgrade Request originalmente)
-        List<String> headers = session.getHandshakeHeaders().get(headerName);
-        return (headers != null && !headers.isEmpty()) ? headers.get(0) : null;
-    }
-
-    private SSLContext createBlindSslContext() {
+    private OkHttpClient createBlindOkHttpClient() {
         try {
             TrustManager[] trustAllCerts = new TrustManager[]{
                     new X509TrustManager() {
-                        public X509Certificate[] getAcceptedIssuers() { return null; }
-                        public void checkClientTrusted(X509Certificate[] certs, String authType) {}
-                        public void checkServerTrusted(X509Certificate[] certs, String authType) {}
+                        public void checkClientTrusted(X509Certificate[] chain, String authType) {}
+                        public void checkServerTrusted(X509Certificate[] chain, String authType) {}
+                        public X509Certificate[] getAcceptedIssuers() { return new X509Certificate[]{}; }
                     }
             };
-            SSLContext sc = SSLContext.getInstance("TLS");
-            sc.init(null, trustAllCerts, new java.security.SecureRandom());
-            return sc;
+            SSLContext sslContext = SSLContext.getInstance("SSL");
+            sslContext.init(null, trustAllCerts, new SecureRandom());
+            return new OkHttpClient.Builder()
+                    .sslSocketFactory(sslContext.getSocketFactory(), (X509TrustManager) trustAllCerts[0])
+                    .hostnameVerifier((hostname, session) -> true)
+                    .build();
         } catch (Exception e) {
-            throw new RuntimeException("Falha ao criar Blind SSL Context", e);
-            }
+            throw new RuntimeException(e);
         }
     }
+}
